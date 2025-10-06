@@ -81,14 +81,39 @@ class SeCModelLoader:
             config = SeCConfig.from_pretrained(model_path)
             config.hydra_overrides_extra = hydra_overrides_extra
             config.grounding_maskmem_num = grounding_maskmem_num
-            
-            # Load model
+
+            # Load model with proper memory management
+            # For large models, use device_map to avoid OOM and BSOD
+            load_kwargs = {
+                "config": config,
+                "torch_dtype": torch_dtype,
+                "use_flash_attn": use_flash_attn,
+            }
+
+            # Use device_map for automatic memory management on CUDA
+            if device == "cuda":
+                # Clear CUDA cache before loading
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
+
+                # Use device_map="auto" for large models to prevent OOM
+                load_kwargs["device_map"] = "auto"
+                load_kwargs["low_cpu_mem_usage"] = True
+
+                print(f"Loading SeC model with device_map='auto' for safe GPU memory allocation...")
+            else:
+                # For CPU, load normally but with low memory mode
+                load_kwargs["low_cpu_mem_usage"] = True
+
             model = SeCModel.from_pretrained(
                 model_path,
-                config=config,
-                torch_dtype=torch_dtype,
-                use_flash_attn=use_flash_attn
-            ).eval().to(device)
+                **load_kwargs
+            ).eval()
+
+            # Only manually move to device if not using device_map
+            if device != "cuda":
+                model = model.to(device)
             
             # Load tokenizer
             tokenizer = AutoTokenizer.from_pretrained(
