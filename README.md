@@ -11,7 +11,19 @@ ComfyUI custom nodes for SeC (Segment Concept) - a concept-driven video object s
 
 1. Copy the `comfyui_sec_nodes` folder to your ComfyUI `custom_nodes` directory
 2. Install the SeC dependencies by following the main project setup instructions
-3. Restart ComfyUI
+3. Install additional node dependencies: `pip install -r comfyui_sec_nodes/requirements.txt`
+4. Restart ComfyUI
+
+### Windows Installation Notes
+
+**PyTorch with CUDA**: For best performance on Windows, install PyTorch with CUDA support using the official command from [pytorch.org](https://pytorch.org/get-started/locally/):
+
+```bash
+# Example for CUDA 12.1 (check pytorch.org for latest)
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+```
+
+**Alternative OpenCV**: If you encounter OpenCV issues, the requirements.txt uses `opencv-python-headless` which is more Windows-compatible than the full `opencv-python` package.
 
 ## Nodes
 

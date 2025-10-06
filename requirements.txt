@@ -1,16 +1,21 @@
 # ComfyUI SeC Nodes Requirements
 # Note: Install the main SeC project requirements first
 
+# PyTorch - install with CUDA support for best performance
+# Windows users: Use official PyTorch installation command from pytorch.org
 torch>=2.5.1
 torchvision>=0.20.1
+
 transformers>=4.37.0
 pillow>=8.0.0
 numpy>=1.21.0
-opencv-python>=4.5.0
+
+# OpenCV - headless version recommended for Windows compatibility
+opencv-python-headless>=4.5.0
+
 peft>=0.7.0
 packaging>=21.0
 
-# These should already be installed with the main SeC project
-# Uncomment if needed for standalone installation
-# hydra-core>=1.1.0
-# omegaconf>=2.1.0
+# Configuration management (required for SeC)
+hydra-core>=1.1.0
+omegaconf>=2.1.0
