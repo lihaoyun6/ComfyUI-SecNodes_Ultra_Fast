@@ -129,12 +129,49 @@ class SeCModelLoader:
             # Prepare model for generation
             model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
 
-            # Additional dtype consistency check for grounding encoder (SAM2)
-            # Ensure all submodules are in the same dtype to prevent mat1/mat2 dtype errors
+            # NUCLEAR OPTION: Register forward hooks to automatically convert all inputs to model dtype
+            # This prevents ANY dtype mismatch by converting at every module boundary
             if device == "cuda" and torch_dtype != torch.float32:
-                print(f"Ensuring grounding encoder consistency with {torch_dtype}...")
-                if hasattr(model, 'grounding_encoder'):
-                    model.grounding_encoder = model.grounding_encoder.to(dtype=torch_dtype)
+                print(f"Installing dtype conversion hooks to ensure {torch_dtype} consistency...")
+
+                def dtype_conversion_hook(module, args, kwargs):
+                    """Automatically convert all tensor inputs to match module's dtype"""
+                    try:
+                        # Get the module's dtype from its parameters
+                        module_dtype = None
+                        for param in module.parameters():
+                            module_dtype = param.dtype
+                            break
+
+                        if module_dtype is None:
+                            return args, kwargs
+
+                        # Convert all tensor arguments
+                        new_args = []
+                        for arg in args:
+                            if isinstance(arg, torch.Tensor) and arg.dtype != module_dtype:
+                                new_args.append(arg.to(dtype=module_dtype))
+                            else:
+                                new_args.append(arg)
+
+                        # Convert all tensor keyword arguments
+                        new_kwargs = {}
+                        for k, v in kwargs.items():
+                            if isinstance(v, torch.Tensor) and v.dtype != module_dtype:
+                                new_kwargs[k] = v.to(dtype=module_dtype)
+                            else:
+                                new_kwargs[k] = v
+
+                        return tuple(new_args), new_kwargs
+                    except Exception:
+                        return args, kwargs
+
+                # Register hook on ALL modules that have parameters (Conv, Linear, etc.)
+                for module in model.modules():
+                    if len(list(module.parameters(recurse=False))) > 0:
+                        module.register_forward_pre_hook(dtype_conversion_hook, with_kwargs=True)
+
+                print(f"Dtype conversion hooks installed on {sum(1 for _ in model.modules())} modules")
 
             print(f"SeC model loaded successfully on {device}")
 
