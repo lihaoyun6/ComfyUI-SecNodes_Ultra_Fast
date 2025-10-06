@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from torch.nn.init import trunc_normal_
 from tqdm import tqdm
 
-from hydra import compose
 from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
@@ -25,6 +24,15 @@ def build_sam2_video_predictor(
     apply_postprocessing=True,
     **kwargs,
 ):
+    # Get the directory of this file to locate local configs
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    config_dir = os.path.join(current_dir, "..", "configs")
+    config_path = os.path.join(config_dir, config_file)
+    
+    # Load config directly from YAML file
+    cfg = OmegaConf.load(config_path)
+    
+    # Apply overrides manually
     hydra_overrides = [
         "++model._target_=inference.sam2_video_predictor.SAM2VideoPredictor",
     ]
@@ -44,9 +52,53 @@ def build_sam2_video_predictor(
         f"model.num_maskmem={num_maskmem}"
     )
     hydra_overrides.extend(hydra_overrides_extra)
+    
+    # Apply overrides to config manually
+    for override in hydra_overrides:
+        if override.startswith("++"):
+            # Handle new key addition
+            key_path = override[2:].split("=")[0]
+            value = "=".join(override[2:].split("=")[1:])
+            # Convert string values to appropriate types
+            if value.lower() in ["true", "false"]:
+                value = value.lower() == "true"
+            elif value.replace(".", "").replace("-", "").isdigit():
+                if "." in value:
+                    value = float(value)
+                else:
+                    value = int(value)
+            
+            # Set nested config value
+            keys = key_path.split(".")
+            current = cfg
+            for key in keys[:-1]:
+                if key not in current:
+                    current[key] = OmegaConf.create({})
+                current = current[key]
+            current[keys[-1]] = value
+        else:
+            # Handle simple overrides
+            if "=" in override:
+                key_path = override.split("=")[0]
+                value = "=".join(override.split("=")[1:])
+                # Convert string values to appropriate types
+                if value.lower() in ["true", "false"]:
+                    value = value.lower() == "true"
+                elif value.replace(".", "").replace("-", "").isdigit():
+                    if "." in value:
+                        value = float(value)
+                    else:
+                        value = int(value)
+                
+                # Set nested config value
+                keys = key_path.split(".")
+                current = cfg
+                for key in keys[:-1]:
+                    if key not in current:
+                        current[key] = OmegaConf.create({})
+                    current = current[key]
+                current[keys[-1]] = value
 
-    # Read config and init model
-    cfg = compose(config_name=config_file, overrides=hydra_overrides)
     OmegaConf.resolve(cfg)
     model = instantiate(cfg.model, _recursive_=True)
     return model
