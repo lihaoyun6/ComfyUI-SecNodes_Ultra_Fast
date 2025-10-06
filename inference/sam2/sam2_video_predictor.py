@@ -335,7 +335,14 @@ class SAM2VideoPredictor(SAM2Base):
         assert mask.dim() == 2
         mask_H, mask_W = mask.shape
         mask_inputs_orig = mask[None, None]  # add batch and channel dimension
-        mask_inputs_orig = mask_inputs_orig.float().to(inference_state["device"])
+
+        # Get model dtype to ensure consistency
+        try:
+            model_dtype = next(self.parameters()).dtype
+        except StopIteration:
+            model_dtype = torch.float32
+
+        mask_inputs_orig = mask_inputs_orig.to(dtype=model_dtype, device=inference_state["device"])
 
         # resize the mask if it doesn't match the model's image size
         if mask_H != self.image_size or mask_W != self.image_size:
@@ -346,7 +353,7 @@ class SAM2VideoPredictor(SAM2Base):
                 mode="bilinear",
                 antialias=True,  # use antialias for downsampling
             )
-            mask_inputs = (mask_inputs >= 0.5).float()
+            mask_inputs = (mask_inputs >= 0.5).to(dtype=model_dtype)
         else:
             mask_inputs = mask_inputs_orig
 
@@ -885,7 +892,15 @@ class SAM2VideoPredictor(SAM2Base):
         if backbone_out is None:
             # Cache miss -- we will run inference on a single image
             device = inference_state["device"]
-            image = inference_state["images"][frame_idx].to(device).float().unsqueeze(0)
+
+            # Get model dtype to ensure input matches model weights
+            # This prevents dtype mismatch errors when using bfloat16/float16
+            try:
+                model_dtype = next(self.image_encoder.parameters()).dtype
+            except StopIteration:
+                model_dtype = torch.float32
+
+            image = inference_state["images"][frame_idx].to(device).to(dtype=model_dtype).unsqueeze(0)
             backbone_out = self.forward_image(image)
             # Cache the most recent frame's feature (for repeated interactions with
             # a frame; we can use an LRU cache for more frames in the future).

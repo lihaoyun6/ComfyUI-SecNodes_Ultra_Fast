@@ -323,8 +323,9 @@ class SAM2Base(torch.nn.Module):
             # and feed it as a dense mask prompt into the SAM mask encoder
             assert len(mask_inputs.shape) == 4 and mask_inputs.shape[:2] == (B, 1)
             if mask_inputs.shape[-2:] != self.sam_prompt_encoder.mask_input_size:
+                # Preserve dtype during interpolation instead of forcing float32
                 sam_mask_prompt = F.interpolate(
-                    mask_inputs.float(),
+                    mask_inputs,
                     size=self.sam_prompt_encoder.mask_input_size,
                     align_corners=False,
                     mode="bilinear",
@@ -419,7 +420,8 @@ class SAM2Base(torch.nn.Module):
         """
         # Use -10/+10 as logits for neg/pos pixels (very close to 0/1 in prob after sigmoid).
         out_scale, out_bias = 20.0, -10.0  # sigmoid(-10.0)=4.5398e-05
-        mask_inputs_float = mask_inputs.float()
+        # Preserve dtype instead of forcing float32
+        mask_inputs_float = mask_inputs.to(dtype=mask_inputs.dtype)
         high_res_masks = mask_inputs_float * out_scale + out_bias
         low_res_masks = F.interpolate(
             high_res_masks,
@@ -428,8 +430,8 @@ class SAM2Base(torch.nn.Module):
             mode="bilinear",
             antialias=True,  # use antialias for downsampling
         )
-        # a dummy IoU prediction of all 1's under mask input
-        ious = mask_inputs.new_ones(mask_inputs.size(0), 1).float()
+        # a dummy IoU prediction of all 1's under mask input (preserve dtype)
+        ious = mask_inputs.new_ones(mask_inputs.size(0), 1, dtype=mask_inputs.dtype)
         if not self.use_obj_ptrs_in_encoder:
             # all zeros as a dummy object pointer (of shape [B, C])
             obj_ptr = torch.zeros(
