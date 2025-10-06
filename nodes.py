@@ -5,13 +5,10 @@ import folder_paths
 import os
 import sys
 
-# Add the SeC inference path to system path
-sec_path = os.path.join(os.path.dirname(__file__), "..")
-if sec_path not in sys.path:
-    sys.path.insert(0, sec_path)
+# Self-contained SeC inference - no external path needed
 
-from inference.configuration_sec import SeCConfig
-from inference.modeling_sec import SeCModel
+from .inference.configuration_sec import SeCConfig
+from .inference.modeling_sec import SeCModel
 from transformers import AutoTokenizer
 
 
