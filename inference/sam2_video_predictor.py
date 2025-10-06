@@ -25,6 +25,7 @@ from .sam2.modeling.sam.transformer import RoPEAttention
 from .sam2.modeling.memory_encoder import MemoryEncoder, MaskDownSampler, Fuser, CXBlock
 
 # Local class registry - maps target strings to actual classes for complete import isolation
+# Note: SAM2VideoPredictor will be added after class definition
 LOCAL_CLASS_REGISTRY = {
     "inference.sam2.modeling.sam2_base.SAM2Base": SAM2Base,
     "inference.sam2.modeling.backbones.hieradet.Hiera": Hiera,
@@ -38,7 +39,6 @@ LOCAL_CLASS_REGISTRY = {
     "inference.sam2.modeling.memory_encoder.MaskDownSampler": MaskDownSampler,
     "inference.sam2.modeling.memory_encoder.Fuser": Fuser,
     "inference.sam2.modeling.memory_encoder.CXBlock": CXBlock,
-    "inference.sam2_video_predictor.SAM2VideoPredictor": SAM2VideoPredictor,
 }
 
 def build_sam2_video_predictor(
@@ -586,5 +586,9 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
             "low_res_multimasks": low_res_multimasks,
         }
         return compact_current_out, pred_masks_gpu
+
+
+# Add SAM2VideoPredictor to registry after class definition
+LOCAL_CLASS_REGISTRY["inference.sam2_video_predictor.SAM2VideoPredictor"] = SAM2VideoPredictor
 
 
