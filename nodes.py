@@ -212,10 +212,18 @@ class SeCVideoSegmentation:
                     "tooltip": "Advanced: Max frames to process (-1 for all)"
                 }),
                 "mllm_memory_size": ("INT", {
-                    "default": 7,
+                    "default": 5,
                     "min": 1,
                     "max": 20,
-                    "tooltip": "Advanced: Frames in multimodal memory"
+                    "tooltip": "Advanced: Frames in multimodal memory. Lower values use less memory."
+                }),
+                "offload_video_to_cpu": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Memory: Offload video frames to CPU (saves GPU memory, minimal speed impact)"
+                }),
+                "offload_state_to_cpu": ("BOOLEAN", {
+                    "default": False,
+                    "tooltip": "Memory: Offload inference state to CPU (saves GPU memory, ~10% slower)"
                 })
             }
         }
@@ -316,14 +324,19 @@ class SeCVideoSegmentation:
     
     def segment_video(self, model, tokenizer, frames, positive_points="", negative_points="",
                      bbox="", input_mask=None, tracking_direction="forward",
-                     annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=7):
+                     annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=5,
+                     offload_video_to_cpu=False, offload_state_to_cpu=False):
         """Perform video object segmentation"""
 
         try:
             pil_images = self.tensor_to_pil_images(frames)
             video_dir, frame_paths = self.save_frames_temporarily(pil_images)
 
-            inference_state = model.grounding_encoder.init_state(video_path=video_dir)
+            inference_state = model.grounding_encoder.init_state(
+                video_path=video_dir,
+                offload_video_to_cpu=offload_video_to_cpu,
+                offload_state_to_cpu=offload_state_to_cpu
+            )
             model.grounding_encoder.reset_state(inference_state)
 
             pos_points, pos_labels = self.parse_points(positive_points)
@@ -455,9 +468,14 @@ class SeCVideoSegmentation:
             obj_ids_tensor = torch.tensor(output_obj_ids, dtype=torch.int32)
 
             import shutil
+            import gc
             if os.path.exists(video_dir):
                 shutil.rmtree(video_dir)
-            
+
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+
             return (masks_tensor, obj_ids_tensor)
 
         except Exception as e:

@@ -110,7 +110,9 @@ Segment and track objects across video frames.
 | *annotation_frame_idx* | INT | 0 | Frame where prompt is applied |
 | *object_id* | INT | 1 | Unique ID for multi-object tracking |
 | *max_frames_to_track* | INT | -1 | Max frames (-1 = all) |
-| *mllm_memory_size* | INT | 7 | Semantic memory size |
+| *mllm_memory_size* | INT | 5 | Semantic memory size (lower = less memory) |
+| *offload_video_to_cpu* | BOOLEAN | False | Offload video frames to CPU (saves GPU memory) |
+| *offload_state_to_cpu* | BOOLEAN | False | Offload inference state to CPU (saves more GPU, ~10% slower) |
 
 **Outputs:** `masks` (MASK), `object_ids` (INT)
 
@@ -200,7 +202,9 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 - **Python**: 3.10-3.12
 - **PyTorch**: Included with ComfyUI
 - **CUDA GPU**: Recommended (CPU supported but slow)
-- **VRAM**: ~16GB for SeC-4B model with bfloat16
+- **VRAM**: ~12-16GB for SeC-4B model with bfloat16
+  - Can reduce to ~8-10GB by enabling `offload_video_to_cpu` and `offload_state_to_cpu`
+  - Lower `mllm_memory_size` (default: 5) for additional memory savings
 
 ## Links & Resources
 
@@ -213,11 +217,20 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 
 **Model not found**: Ensure model is at `ComfyUI/models/sams/SeC-4B/`
 
-**CUDA out of memory**: Try `float16` or reduce `mllm_memory_size`
+**CUDA out of memory**:
+- Enable `offload_video_to_cpu` and `offload_state_to_cpu` (minimal speed impact)
+- Reduce `mllm_memory_size` from 5 to 3
+- Try `float16` precision instead of `bfloat16`
+- Process fewer frames at once
 
-**Slow inference**: Enable `use_flash_attn` (requires Flash Attention 2)
+**Slow inference**:
+- Enable `use_flash_attn` in model loader (requires Flash Attention 2)
+- Disable offload options if you have sufficient VRAM
+- Use `bfloat16` precision (default)
 
 **Empty masks**: Provide clearer visual prompts or try different frame
+
+**High memory usage**: Reduce `mllm_memory_size` (default 5, try 3) - trades some quality for memory
 
 ---
 

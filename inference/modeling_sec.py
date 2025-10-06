@@ -539,8 +539,8 @@ class SeCModel(PreTrainedModel):
             )
             processing_order = range(start_frame_idx, end_frame_idx + 1)
 
-
-        mllm_memory = [(start_frame_idx, Image.open(video_paths[start_frame_idx]).convert('RGB'), init_mask)]
+        mllm_memory = [(start_frame_idx, init_mask)]
+        frame_cache = {}
 
         for frame_idx in tqdm(processing_order, desc="propagate in video"):
             _update_flag = False
@@ -568,9 +568,14 @@ class SeCModel(PreTrainedModel):
                     "run_mem_encoder": True,
                     "start_frame_idx": start_frame_idx,
                 }
-                
-                current_img = Image.open(video_paths[frame_idx]).convert('RGB')
-                last_img = Image.open(video_paths[frame_idx-1]).convert('RGB')
+
+                if frame_idx not in frame_cache:
+                    frame_cache[frame_idx] = Image.open(video_paths[frame_idx]).convert('RGB')
+                current_img = frame_cache[frame_idx]
+
+                if frame_idx - 1 not in frame_cache:
+                    frame_cache[frame_idx - 1] = Image.open(video_paths[frame_idx-1]).convert('RGB')
+                last_img = frame_cache[frame_idx - 1]
                 flags = [is_scene_change_hsv(current_img, last_img)]
                 if len(mllm_memory) > mllm_memory_size:
                     _mllm_memory = [mllm_memory[0]] + mllm_memory[-(mllm_memory_size-1):]
@@ -582,7 +587,11 @@ class SeCModel(PreTrainedModel):
                     language_embd = None
                 else:
                     _update_flag = True
-                    video = [label_img_with_mask(img, mask) for _, img, mask in _mllm_memory]
+                    video = []
+                    for mem_frame_idx, mem_mask in _mllm_memory:
+                        if mem_frame_idx not in frame_cache:
+                            frame_cache[mem_frame_idx] = Image.open(video_paths[mem_frame_idx]).convert('RGB')
+                        video.append(label_img_with_mask(frame_cache[mem_frame_idx], mem_mask))
                     video.append(current_img)
                     text = "<image>Please segment the object in the last frame based on the object labeled in the first several images."
                     specific_language_embd = self.predict_forward(video=video, text=text)
@@ -609,9 +618,15 @@ class SeCModel(PreTrainedModel):
             )
             if _update_flag and (video_res_masks[0] > 0.0).sum() != 0 and current_out["object_score_logits"].item() > 1:
                 mllm_memory.append((
-                    frame_idx, Image.open(video_paths[frame_idx]).convert('RGB'),
+                    frame_idx,
                     (video_res_masks[0] > 0.0).cpu().numpy()
                 ))
+
+            if len(frame_cache) > 10:
+                oldest_frame = min(frame_cache.keys())
+                if oldest_frame < frame_idx - 5:
+                    del frame_cache[oldest_frame]
+
             yield frame_idx, obj_ids, video_res_masks
         
     def predict_forward(
