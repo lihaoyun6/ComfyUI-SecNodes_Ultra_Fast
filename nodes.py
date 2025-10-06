@@ -29,23 +29,19 @@ class SeCModelLoader:
                     "default": "bfloat16",
                     "tooltip": "Data precision for model inference. bfloat16 recommended for best speed/quality balance."
                 }),
-                "use_flash_attn": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Enable Flash Attention 2 for faster and more memory-efficient attention computation."
-                }),
                 "device": (["auto", "cuda", "cpu"], {
                     "default": "auto",
                     "tooltip": "Target device for model inference. 'auto' selects CUDA if available, otherwise CPU."
+                })
+            },
+            "optional": {
+                "use_flash_attn": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Enable Flash Attention 2 for faster inference. Advanced option."
                 }),
                 "hydra_overrides": ("STRING", {
                     "default": "++model.non_overlap_masks=false",
-                    "tooltip": "Hydra configuration overrides (comma-separated). Controls model behavior like mask overlapping."
-                }),
-                "grounding_maskmem_num": ("INT", {
-                    "default": 22,
-                    "min": 1,
-                    "max": 100,
-                    "tooltip": "Number of memory frames stored by the grounding encoder for temporal consistency."
+                    "tooltip": "Advanced: Hydra configuration overrides (comma-separated)."
                 })
             }
         }
@@ -56,7 +52,7 @@ class SeCModelLoader:
     CATEGORY = "SeC"
     TITLE = "SeC Model Loader"
     
-    def load_model(self, model_path, torch_dtype, use_flash_attn, device, hydra_overrides, grounding_maskmem_num):
+    def load_model(self, model_path, torch_dtype, device, use_flash_attn=True, hydra_overrides="++model.non_overlap_masks=false"):
         """Load SeC model and tokenizer"""
         
         # Determine device
@@ -80,7 +76,6 @@ class SeCModelLoader:
             # Load configuration
             config = SeCConfig.from_pretrained(model_path)
             config.hydra_overrides_extra = hydra_overrides_extra
-            config.grounding_maskmem_num = grounding_maskmem_num
 
             # Load model with proper memory management
             # For large models, use device_map to avoid OOM and BSOD
@@ -216,63 +211,53 @@ class SeCVideoSegmentation:
                     "tooltip": "SeC tokenizer loaded from SeCModelLoader node"
                 }),
                 "frames": ("IMAGE", {
-                    "tooltip": "Sequential video frames as IMAGE tensor batch. Should contain all frames of the video in temporal order."
-                }),
-                "annotation_frame_idx": ("INT", {
-                    "default": 0,
-                    "min": 0,
-                    "tooltip": "Frame index where initial annotation/prompt is applied. Usually the first frame (0) or a clear frame."
-                }),
-                "object_id": ("INT", {
-                    "default": 1,
-                    "min": 1,
-                    "tooltip": "Unique identifier for this object. Use different IDs when tracking multiple objects simultaneously."
+                    "tooltip": "Sequential video frames as IMAGE tensor batch"
                 })
             },
             "optional": {
                 "positive_points": ("STRING", {
                     "default": "",
-                    "tooltip": "Positive click coordinates as JSON string: '[{\"x\": 63, \"y\": 782}]' or '[{\"x\": 82, \"y\": 551}, {\"x\": 81, \"y\": 814}]'. Points that belong to the target object."
+                    "tooltip": "Positive click coordinates as JSON: '[{\"x\": 63, \"y\": 782}]'"
                 }),
                 "negative_points": ("STRING", {
                     "default": "",
-                    "tooltip": "Negative click coordinates as JSON string: '[{\"x\": 100, \"y\": 200}]'. Points that do NOT belong to the target object."
+                    "tooltip": "Negative click coordinates as JSON: '[{\"x\": 100, \"y\": 200}]'"
                 }),
                 "bbox": ("STRING", {
                     "default": "",
-                    "tooltip": "Bounding box as 'x_min,y_min,x_max,y_max'. Rectangular region containing the target object."
+                    "tooltip": "Bounding box as 'x_min,y_min,x_max,y_max'"
                 }),
                 "input_mask": ("MASK", {
-                    "tooltip": "Binary mask for precise object initialization. Use mask output from other segmentation nodes."
+                    "tooltip": "Binary mask for object initialization"
                 }),
                 "text_prompt": ("STRING", {
                     "default": "",
-                    "tooltip": "Natural language description of the object to segment (e.g., 'person wearing red shirt', 'flying bird')."
+                    "tooltip": "Natural language description for semantic reasoning. Requires visual prompt for initialization."
                 }),
-                "start_frame_idx": ("INT", {
+                "tracking_direction": (["forward", "backward", "bidirectional"], {
+                    "default": "forward",
+                    "tooltip": "Tracking direction from annotation frame"
+                }),
+                "annotation_frame_idx": ("INT", {
                     "default": 0,
                     "min": 0,
-                    "tooltip": "Starting frame index for temporal propagation. Default 0 starts from the beginning."
+                    "tooltip": "Advanced: Frame where initial prompt is applied"
+                }),
+                "object_id": ("INT", {
+                    "default": 1,
+                    "min": 1,
+                    "tooltip": "Advanced: Unique ID for multi-object tracking"
                 }),
                 "max_frames_to_track": ("INT", {
                     "default": -1,
                     "min": -1,
-                    "tooltip": "Maximum number of frames to process (-1 for all frames). Useful for limiting computation."
-                }),
-                "tracking_direction": (["forward", "backward", "bidirectional"], {
-                    "default": "forward",
-                    "tooltip": "Tracking direction: 'forward' (annotation→end), 'backward' (annotation→start), 'bidirectional' (both directions from annotation frame)"
+                    "tooltip": "Advanced: Max frames to process (-1 for all)"
                 }),
                 "mllm_memory_size": ("INT", {
                     "default": 7,
                     "min": 1,
                     "max": 20,
-                    "tooltip": "Number of recent frames stored in multimodal memory for semantic reasoning and scene understanding."
-                }),
-                "output_stride": ("INT", {
-                    "default": 1,
-                    "min": 1,
-                    "tooltip": "Output every N-th frame to reduce output size. Set to 1 for all frames, 2 for every other frame, etc."
+                    "tooltip": "Advanced: Frames in multimodal memory"
                 })
             }
         }
@@ -384,10 +369,9 @@ class SeCVideoSegmentation:
         
         return temp_dir, frame_paths
     
-    def segment_video(self, model, tokenizer, frames, annotation_frame_idx, object_id,
-                     positive_points="", negative_points="", bbox="", input_mask=None,
-                     text_prompt="", start_frame_idx=0, max_frames_to_track=-1,
-                     tracking_direction="forward", mllm_memory_size=7, output_stride=1):
+    def segment_video(self, model, tokenizer, frames, positive_points="", negative_points="",
+                     bbox="", input_mask=None, text_prompt="", tracking_direction="forward",
+                     annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=7):
         """Perform video object segmentation"""
         
         try:
@@ -440,7 +424,7 @@ class SeCVideoSegmentation:
                 # MASK type is already 2D grayscale, just convert to binary
                 init_mask = (mask_array > 0.5).astype(np.bool_)
 
-                # Add mask to inference state (this might need adjustment based on SeC API)
+                # Add mask to inference state
                 _, out_obj_ids, out_mask_logits = model.grounding_encoder.add_new_mask(
                     inference_state=inference_state,
                     frame_idx=annotation_frame_idx,
@@ -448,17 +432,8 @@ class SeCVideoSegmentation:
                     mask=init_mask,
                 )
 
-            elif text_prompt and text_prompt.strip():
-                # Text-based prompting - SeC uses text to guide segmentation
-                # The text prompt will be used during propagate_in_video
-                # For now, we need to initialize with a placeholder or use the model's text grounding
-                # This assumes the model has text grounding capabilities
-                print(f"Using text prompt: '{text_prompt}' for object segmentation")
-                # Initialize with empty mask - text will guide during propagation
-                init_mask = None
-
             else:
-                raise ValueError("At least one prompt type (points, bbox, mask, or text) must be provided")
+                raise ValueError("At least one visual prompt (points, bbox, or mask) must be provided for initialization")
             
             # Set tracking parameters
             if max_frames_to_track == -1:
@@ -524,7 +499,7 @@ class SeCVideoSegmentation:
                 reverse = (tracking_direction == "backward")
                 for out_frame_idx, out_obj_ids, out_mask_logits in model.propagate_in_video(
                     inference_state,
-                    start_frame_idx=annotation_frame_idx if start_frame_idx == 0 else start_frame_idx,
+                    start_frame_idx=annotation_frame_idx,
                     max_frame_num_to_track=max_frames_to_track,
                     reverse=reverse,
                     init_mask=init_mask,
@@ -539,13 +514,12 @@ class SeCVideoSegmentation:
             # Convert results to ComfyUI format
             output_masks = []
             output_obj_ids = []
-            
+
             for frame_idx in sorted(video_segments.keys()):
-                if frame_idx % output_stride == 0:  # Apply output stride
-                    for obj_id, mask in video_segments[frame_idx].items():
-                        mask_tensor = self.mask_to_tensor(mask)
-                        output_masks.append(mask_tensor)
-                        output_obj_ids.append(obj_id)
+                for obj_id, mask in video_segments[frame_idx].items():
+                    mask_tensor = self.mask_to_tensor(mask)
+                    output_masks.append(mask_tensor)
+                    output_obj_ids.append(obj_id)
             
             if not output_masks:
                 # Return empty mask if no results (2D grayscale for MASK type)
