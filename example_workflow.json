@@ -1,0 +1,110 @@
+{
+  "last_node_id": 6,
+  "last_link_id": 9,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImageBatch",
+      "pos": [100, 100],
+      "size": {"0": 315, "1": 314},
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "IMAGE", "type": "IMAGE", "links": [1], "shape": 3}
+      ],
+      "properties": {"Node name for S&R": "LoadImageBatch"},
+      "widgets_values": [
+        "path/to/video/frames/",
+        "*.jpg",
+        0,
+        -1
+      ],
+      "title": "Load Video Frames"
+    },
+    {
+      "id": 2,
+      "type": "SeCModelLoader", 
+      "pos": [100, 450],
+      "size": {"0": 400, "1": 300},
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {"name": "model", "type": "SEC_MODEL", "links": [2], "shape": 3},
+        {"name": "tokenizer", "type": "SEC_TOKENIZER", "links": [3], "shape": 3}
+      ],
+      "properties": {"Node name for S&R": "SeCModelLoader"},
+      "widgets_values": [
+        "OpenIXCLab/SeC-4B",
+        "bfloat16", 
+        true,
+        "auto",
+        "++model.non_overlap_masks=false",
+        22
+      ],
+      "title": "SeC Model Loader"
+    },
+    {
+      "id": 3,
+      "type": "SeCVideoSegmentation",
+      "pos": [550, 100], 
+      "size": {"0": 400, "1": 600},
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {"name": "model", "type": "SEC_MODEL", "link": 2},
+        {"name": "tokenizer", "type": "SEC_TOKENIZER", "link": 3},
+        {"name": "frames", "type": "IMAGE", "link": 1}
+      ],
+      "outputs": [
+        {"name": "masks", "type": "IMAGE", "links": [4], "shape": 3},
+        {"name": "object_ids", "type": "INT", "links": [5], "shape": 3}
+      ],
+      "properties": {"Node name for S&R": "SeCVideoSegmentation"},
+      "widgets_values": [
+        0,
+        1,
+        "200,300;250,100",
+        "",
+        "",
+        "",
+        0,
+        -1,
+        false,
+        7,
+        1
+      ],
+      "title": "SeC Video Segmentation"
+    },
+    {
+      "id": 4,
+      "type": "PreviewImage",
+      "pos": [1000, 100],
+      "size": {"0": 400, "1": 400},
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {"name": "images", "type": "IMAGE", "link": 4}
+      ],
+      "outputs": [],
+      "properties": {"Node name for S&R": "PreviewImage"},
+      "title": "Preview Masks"
+    }
+  ],
+  "links": [
+    [1, 1, 0, 3, 2, "IMAGE"],
+    [2, 2, 0, 3, 0, "SEC_MODEL"],
+    [3, 2, 1, 3, 1, "SEC_TOKENIZER"],
+    [4, 3, 0, 4, 0, "IMAGE"],
+    [5, 3, 1, 0, 0, "INT"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}

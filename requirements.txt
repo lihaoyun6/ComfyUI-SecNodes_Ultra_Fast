@@ -1,0 +1,16 @@
+# ComfyUI SeC Nodes Requirements
+# Note: Install the main SeC project requirements first
+
+torch>=2.5.1
+torchvision>=0.20.1
+transformers>=4.37.0
+pillow>=8.0.0
+numpy>=1.21.0
+opencv-python>=4.5.0
+peft>=0.7.0
+packaging>=21.0
+
+# These should already be installed with the main SeC project
+# Uncomment if needed for standalone installation
+# hydra-core>=1.1.0
+# omegaconf>=2.1.0
