@@ -181,6 +181,17 @@ class TwoWayAttentionBlock(nn.Module):
     def forward(
         self, queries: Tensor, keys: Tensor, query_pe: Tensor, key_pe: Tensor
     ) -> Tuple[Tensor, Tensor]:
+        # Ensure all inputs have the same dtype as the model weights
+        # This prevents dtype mismatch errors when using bfloat16/float16
+        try:
+            model_dtype = next(self.parameters()).dtype
+            queries = queries.to(dtype=model_dtype)
+            keys = keys.to(dtype=model_dtype)
+            query_pe = query_pe.to(dtype=model_dtype)
+            key_pe = key_pe.to(dtype=model_dtype)
+        except StopIteration:
+            pass  # No parameters, skip dtype conversion
+
         # Self attention block
         if self.skip_first_layer_pe:
             queries = self.self_attn(q=queries, k=queries, v=queries)

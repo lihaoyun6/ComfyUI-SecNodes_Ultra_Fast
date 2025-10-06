@@ -111,8 +111,13 @@ class SeCModelLoader:
                 **load_kwargs
             ).eval()
 
-            # Only manually move to device if not using device_map
-            if device != "cuda":
+            # Force entire model to consistent dtype to avoid mixed precision issues
+            # This is critical when using device_map="auto" which can cause dtype fragmentation
+            if device == "cuda" and torch_dtype != torch.float32:
+                print(f"Converting entire model to {torch_dtype} to ensure dtype consistency...")
+                model = model.to(dtype=torch_dtype)
+            elif device != "cuda":
+                # Only manually move to device if not using device_map
                 model = model.to(device)
             
             # Load tokenizer
@@ -123,9 +128,16 @@ class SeCModelLoader:
             
             # Prepare model for generation
             model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
-            
+
+            # Additional dtype consistency check for grounding encoder (SAM2)
+            # Ensure all submodules are in the same dtype to prevent mat1/mat2 dtype errors
+            if device == "cuda" and torch_dtype != torch.float32:
+                print(f"Ensuring grounding encoder consistency with {torch_dtype}...")
+                if hasattr(model, 'grounding_encoder'):
+                    model.grounding_encoder = model.grounding_encoder.to(dtype=torch_dtype)
+
             print(f"SeC model loaded successfully on {device}")
-            
+
             return (model, tokenizer)
             
         except Exception as e:
