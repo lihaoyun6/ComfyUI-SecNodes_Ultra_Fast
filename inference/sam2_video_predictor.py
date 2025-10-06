@@ -12,9 +12,34 @@ from tqdm import tqdm
 from omegaconf import OmegaConf
 
 from .sam2.sam2_video_predictor import SAM2VideoPredictor as _SAM2VideoPredictor
-from .sam2.modeling.sam2_base import NO_OBJ_SCORE
+from .sam2.modeling.sam2_base import NO_OBJ_SCORE, SAM2Base
 from .sam2.utils.misc import concat_points, fill_holes_in_mask_scores, load_video_frames
 from .sam2.modeling.sam2_utils import get_1d_sine_pe, MLP, select_closest_cond_frames
+
+# Import all required classes for local instantiation - complete isolation from global imports
+from .sam2.modeling.backbones.hieradet import Hiera
+from .sam2.modeling.backbones.image_encoder import ImageEncoder, FpnNeck
+from .sam2.modeling.position_encoding import PositionEmbeddingSine
+from .sam2.modeling.memory_attention import MemoryAttention, MemoryAttentionLayer
+from .sam2.modeling.sam.transformer import RoPEAttention
+from .sam2.modeling.memory_encoder import MemoryEncoder, MaskDownSampler, Fuser, CXBlock
+
+# Local class registry - maps target strings to actual classes for complete import isolation
+LOCAL_CLASS_REGISTRY = {
+    "inference.sam2.modeling.sam2_base.SAM2Base": SAM2Base,
+    "inference.sam2.modeling.backbones.hieradet.Hiera": Hiera,
+    "inference.sam2.modeling.backbones.image_encoder.ImageEncoder": ImageEncoder,
+    "inference.sam2.modeling.backbones.image_encoder.FpnNeck": FpnNeck,
+    "inference.sam2.modeling.position_encoding.PositionEmbeddingSine": PositionEmbeddingSine,
+    "inference.sam2.modeling.memory_attention.MemoryAttention": MemoryAttention,
+    "inference.sam2.modeling.memory_attention.MemoryAttentionLayer": MemoryAttentionLayer,
+    "inference.sam2.modeling.sam.transformer.RoPEAttention": RoPEAttention,
+    "inference.sam2.modeling.memory_encoder.MemoryEncoder": MemoryEncoder,
+    "inference.sam2.modeling.memory_encoder.MaskDownSampler": MaskDownSampler,
+    "inference.sam2.modeling.memory_encoder.Fuser": Fuser,
+    "inference.sam2.modeling.memory_encoder.CXBlock": CXBlock,
+    "inference.sam2_video_predictor.SAM2VideoPredictor": SAM2VideoPredictor,
+}
 
 def build_sam2_video_predictor(
     config_file,
@@ -118,18 +143,12 @@ def build_sam2_video_predictor(
                 # Import and instantiate the target class
                 module_path, class_name = target.rsplit('.', 1)
                 
-                # Handle special case for our local SAM2VideoPredictor
-                if target == "inference.sam2_video_predictor.SAM2VideoPredictor":
-                    return SAM2VideoPredictor(**kwargs)
+                # Use local class registry - complete isolation from global import system
+                if target in LOCAL_CLASS_REGISTRY:
+                    cls = LOCAL_CLASS_REGISTRY[target]
+                    return cls(**kwargs)
                 else:
-                    # Use importlib for other components
-                    import importlib
-                    try:
-                        module = importlib.import_module(module_path)
-                        cls = getattr(module, class_name)
-                        return cls(**kwargs)
-                    except (ImportError, AttributeError) as e:
-                        raise RuntimeError(f"Failed to instantiate {target}: {e}")
+                    raise RuntimeError(f"Unknown local target: {target}. Available targets: {list(LOCAL_CLASS_REGISTRY.keys())}")
             else:
                 # It's a config dict without _target_, recursively process items
                 return {k: create_component(v) for k, v in config_node.items()}
