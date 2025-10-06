@@ -195,7 +195,6 @@ class SeCModel(PreTrainedModel):
         self.vision_model.print_trainable_parameters()
 
     def wrap_llm_lora(self, r=128, lora_alpha=256, lora_dropout=0.05):
-        # Determine the target modules based on the architecture of the language model
         if self.llm_arch_name == 'InternLM2ForCausalLM':
             target_modules = ['attention.wqkv', 'attention.wo', 'feed_forward.w1', 'feed_forward.w2', 'feed_forward.w3']
         elif self.llm_arch_name == 'Phi3ForCausalLM':
@@ -218,11 +217,8 @@ class SeCModel(PreTrainedModel):
 
     def pixel_shuffle(self, x, scale_factor=0.5):
         n, w, h, c = x.size()
-        # N, W, H, C --> N, W, H * scale, C // scale
         x = x.view(n, w, int(h * scale_factor), int(c / scale_factor))
-        # N, W, H * scale, C // scale --> N, H * scale, W, C // scale
         x = x.permute(0, 2, 1, 3).contiguous()
-        # N, H * scale, W, C // scale --> N, H * scale, W * scale, C // (scale ** 2)
         x = x.view(n, int(h * scale_factor), int(w * scale_factor),
                    int(c / (scale_factor * scale_factor)))
         if self.ps_version == 'v1':
@@ -270,7 +266,6 @@ class SeCModel(PreTrainedModel):
                 pixel_values = [
                     x.unsqueeze(0) if x.ndim == 3 else x for x in pixel_values
                 ]
-            # b*n, c, h, w
             concat_images = torch.cat(
                 [image.to(self.vision_model.dtype) for image in pixel_values], dim=0)
         else:
@@ -279,7 +274,6 @@ class SeCModel(PreTrainedModel):
         input_ids = data['input_ids']
         position_ids = data['position_ids']
         attention_mask = data['attention_mask']
-        # sum is 0 are text
         image_flags = torch.sum(concat_images, dim=(1, 2, 3)) != 0
         image_flags = image_flags.long()
 
@@ -317,12 +311,11 @@ class SeCModel(PreTrainedModel):
             else self.config.use_return_dict
 
         image_flags = image_flags.squeeze(-1)
-        # We only added the clone code here to avoid the error.
         input_embeds = self.language_model.get_input_embeddings()(
             input_ids).clone()
 
         vit_embeds = self.extract_feature(pixel_values)
-        vit_embeds = vit_embeds.to(input_embeds.dtype)  # FIXME: why vit_embeds is float16?
+        vit_embeds = vit_embeds.to(input_embeds.dtype)
         fast_vit_embeds = None
 
         vit_embeds = vit_embeds[image_flags == 1]
@@ -365,15 +358,12 @@ class SeCModel(PreTrainedModel):
 
         loss = None
         if labels is not None:
-            # Shift so that tokens < n predict n
             shift_logits = logits[..., :-1, :].contiguous()
             shift_labels = labels[..., 1:].contiguous()
-            # Flatten the tokens
             loss_fct = CrossEntropyLoss()
             shift_logits = shift_logits.view(
                 -1, self.language_model.config.vocab_size)
             shift_labels = shift_labels.view(-1)
-            # Enable model parallelism
             shift_labels = shift_labels.to(shift_logits.device)
             loss = loss_fct(shift_logits, shift_labels)
 
@@ -413,7 +403,6 @@ class SeCModel(PreTrainedModel):
                         pixel_values = [
                             x.unsqueeze(0) if x.ndim == 3 else x for x in pixel_values
                         ]
-                    # b*n, c, h, w
                     pixel_values = torch.cat(
                         [image.to(self.vision_model.dtype) for image in pixel_values], dim=0)
 
@@ -440,7 +429,6 @@ class SeCModel(PreTrainedModel):
             attention_mask=attention_mask.to(device),
             generation_config=generation_config,
             output_hidden_states=output_hidden_states,
-            # return_dict=return_dict,
             use_cache=True,
             **generate_kwargs,
         )
@@ -448,7 +436,6 @@ class SeCModel(PreTrainedModel):
         return outputs
 
     def preparing_for_generation(self, tokenizer, max_new_tokens=2048, torch_dtype=torch.bfloat16):
-        # set stop criteria and generation configs for model
         if not hasattr(self, 'tokenizer'):
             self.tokenizer = tokenizer
         self.bot_name = 'BOT'
@@ -474,7 +461,6 @@ class SeCModel(PreTrainedModel):
         self.torch_dtype = torch_dtype
         self.to(torch_dtype)
         self.extra_image_processor = DirectResize(target_length=1024, )
-        # for multi image process
         self.min_dynamic_patch = 1
         self.max_dynamic_patch = 12
         self.downsample_ratio = 0.5
@@ -497,7 +483,6 @@ class SeCModel(PreTrainedModel):
             T.Normalize(mean=self.IMAGENET_MEAN, std=self.IMAGENET_STD)
         ])
 
-        # change phi3 prepare for generation fuction
         if self.config.llm_config.architectures[0] == 'Phi3ForCausalLM':
             self.language_model.prepare_inputs_for_generation = MethodType(prepare_inputs_for_generation_phi3, self.language_model)
 
@@ -538,19 +523,16 @@ class SeCModel(PreTrainedModel):
             self.grounding_encoder.clear_non_cond_mem_for_multi_obj or batch_size <= 1
         )
 
-        # set start index, end index, and processing order
         if start_frame_idx is None:
-            # default: start from the earliest frame with input points
             start_frame_idx = min(output_dict["cond_frame_outputs"])
         if max_frame_num_to_track is None:
-            # default: track all the frames in the video
             max_frame_num_to_track = num_frames
         if reverse:
             end_frame_idx = max(start_frame_idx - max_frame_num_to_track, 0)
             if start_frame_idx > 0:
                 processing_order = range(start_frame_idx, end_frame_idx - 1, -1)
             else:
-                processing_order = []  # skip reverse tracking if starting from frame 0
+                processing_order = []
         else:
             end_frame_idx = min(
                 start_frame_idx + max_frame_num_to_track, num_frames - 1
@@ -561,17 +543,12 @@ class SeCModel(PreTrainedModel):
         mllm_memory = [(start_frame_idx, Image.open(video_paths[start_frame_idx]).convert('RGB'), init_mask)]
 
         for frame_idx in tqdm(processing_order, desc="propagate in video"):
-            # We skip those frames already in consolidated outputs (these are frames
-            # that received input clicks or mask). Note that we cannot directly run
-            # batched forward on them via `_run_single_frame_inference` because the
-            # number of clicks on each object might be different.
             _update_flag = False
             if frame_idx in consolidated_frame_inds["cond_frame_outputs"]:
                 storage_key = "cond_frame_outputs"
                 current_out = output_dict[storage_key][frame_idx]
                 pred_masks = current_out["pred_masks"]
                 if clear_non_cond_mem:
-                    # clear non-conditioning memory of the surrounding frames
                     self.grounding_encoder._clear_non_cond_mem_around_input(inference_state, frame_idx)
             elif frame_idx in consolidated_frame_inds["non_cond_frame_outputs"]:
                 storage_key = "non_cond_frame_outputs"
@@ -579,7 +556,6 @@ class SeCModel(PreTrainedModel):
                 pred_masks = current_out["pred_masks"]
             else:
                 storage_key = "non_cond_frame_outputs"
-                # language_embd = None
                 inference_params = {
                     "inference_state": inference_state,
                     "output_dict": output_dict,
@@ -616,23 +592,18 @@ class SeCModel(PreTrainedModel):
                 current_out, pred_masks = self.grounding_encoder._run_single_frame_inference(
                     **inference_params, language_embd=language_embd
                 )
-                # optionally offload the output to CPU memory to save GPU space
                 for key, value in current_out.items():
                     if isinstance(value, torch.Tensor):
                         current_out[key] = value.to('cpu', non_blocking=True)
                 pred_masks = pred_masks.to('cpu', non_blocking=True)
 
                 output_dict[storage_key][frame_idx] = current_out
-            
-            # Create slices of per-object outputs for subsequent interaction with each
-            # individual object after tracking.
+
             self.grounding_encoder._add_output_per_object(
                 inference_state, frame_idx, current_out, storage_key
             )
             inference_state["frames_already_tracked"][frame_idx] = {"reverse": reverse}
 
-            # Resize the output mask to the original video resolution (we directly use
-            # the mask scores on GPU for output to avoid any CPU conversion in between)
             _, video_res_masks = self.grounding_encoder._get_orig_video_res_output(
                 inference_state, pred_masks
             )
