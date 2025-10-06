@@ -124,6 +124,20 @@ class MemoryAttention(nn.Module):
         memory_pos: Optional[Tensor] = None,  # pos_enc for cross-attention inputs
         num_obj_ptr_tokens: int = 0,  # number of object pointer *tokens*
     ):
+        # Ensure all inputs match model dtype
+        try:
+            model_dtype = next(self.parameters()).dtype
+            if not isinstance(curr, list):
+                curr = curr.to(dtype=model_dtype)
+            if not isinstance(memory, list):
+                memory = memory.to(dtype=model_dtype)
+            if curr_pos is not None and not isinstance(curr_pos, list):
+                curr_pos = curr_pos.to(dtype=model_dtype)
+            if memory_pos is not None and not isinstance(memory_pos, list):
+                memory_pos = memory_pos.to(dtype=model_dtype)
+        except StopIteration:
+            pass
+
         if isinstance(curr, list):
             assert isinstance(curr_pos, list)
             assert len(curr) == len(curr_pos) == 1

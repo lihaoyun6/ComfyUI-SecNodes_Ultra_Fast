@@ -162,6 +162,14 @@ class MemoryEncoder(nn.Module):
         masks: torch.Tensor,
         skip_mask_sigmoid: bool = False,
     ) -> Tuple[torch.Tensor, torch.Tensor]:
+        # Ensure inputs match model dtype to prevent dtype mismatch in conv layers
+        try:
+            model_dtype = next(self.parameters()).dtype
+            pix_feat = pix_feat.to(dtype=model_dtype)
+            masks = masks.to(dtype=model_dtype)
+        except StopIteration:
+            pass
+
         ## Process masks
         # sigmoid, so that less domain shift from gt masks which are bool
         if not skip_mask_sigmoid:
