@@ -42,11 +42,11 @@ class SeCConfig(PretrainedConfig):
         super().__init__(**kwargs)
         if vision_config is None:
             vision_config = {}
-            logger.info('vision_config is None. Initializing the InternVisionConfig with default values.')
+            logger.debug('vision_config is None. Initializing the InternVisionConfig with default values.')
 
         if llm_config is None:
             llm_config = {}
-            logger.info('llm_config is None. Initializing the LlamaConfig config with default values (`LlamaConfig`).')
+            logger.debug('llm_config is None. Initializing the LlamaConfig config with default values (`LlamaConfig`).')
 
         self.vision_config = InternVisionConfig(**vision_config)
 
@@ -83,10 +83,10 @@ class SeCConfig(PretrainedConfig):
         self.grounding_encoder_config = grounding_encoder_config
         self.grounding_maskmem_num = grounding_maskmem_num
 
-        logger.info(f'vision_select_layer: {self.select_layer}')
-        logger.info(f'ps_version: {self.ps_version}')
-        logger.info(f'min_dynamic_patch: {self.min_dynamic_patch}')
-        logger.info(f'max_dynamic_patch: {self.max_dynamic_patch}')
+        logger.debug(f'vision_select_layer: {self.select_layer}')
+        logger.debug(f'ps_version: {self.ps_version}')
+        logger.debug(f'min_dynamic_patch: {self.min_dynamic_patch}')
+        logger.debug(f'max_dynamic_patch: {self.max_dynamic_patch}')
 
     def to_dict(self):
         """

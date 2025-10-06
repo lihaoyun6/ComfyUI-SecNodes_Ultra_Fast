@@ -121,8 +121,8 @@ class SeCModel(PreTrainedModel):
         config.vision_config.use_flash_attn = True if use_flash_attn else False
         config.llm_config._attn_implementation = 'flash_attention_2' if use_flash_attn else 'eager'
 
-        logger.info(f'num_image_token: {self.num_image_token}')
-        logger.info(f'ps_version: {self.ps_version}')
+        logger.debug(f'num_image_token: {self.num_image_token}')
+        logger.debug(f'ps_version: {self.ps_version}')
         if vision_model is not None:
             self.vision_model = vision_model
         else:
