@@ -50,7 +50,11 @@ class SeCConfig(PretrainedConfig):
 
         self.vision_config = InternVisionConfig(**vision_config)
 
-        if llm_config['architectures'][0] == 'LlamaForCausalLM':
+        # Handle case where llm_config doesn't have architectures key (e.g., during default initialization)
+        if not llm_config or 'architectures' not in llm_config:
+            # Default to LlamaConfig for backward compatibility
+            self.llm_config = LlamaConfig(**llm_config)
+        elif llm_config['architectures'][0] == 'LlamaForCausalLM':
             self.llm_config = LlamaConfig(**llm_config)
         elif llm_config['architectures'][0] == 'InternLM2ForCausalLM':
             self.llm_config = InternLM2Config(**llm_config)
