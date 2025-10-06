@@ -1,43 +1,64 @@
 # ComfyUI SeC Nodes
 
-**Self-contained** ComfyUI custom nodes for **SeC (Segment Concept)** - a concept-driven video object segmentation framework that intelligently combines visual features with semantic reasoning.
+**Self-contained** ComfyUI custom nodes for **SeC (Segment Concept)** - a concept-driven video object segmentation framework using Large Vision-Language Models for automatic visual concept extraction.
 
 ## Features
 
-- 🔥 **SeC Model Loader**: Load SeC models with configurable settings
-- 🔥 **SeC Video Segmentation**: Advanced video object segmentation with multiple prompt types
+- 🔥 **SeC Model Loader**: Load SeC models with simple, intuitive settings
+- 🔥 **SeC Video Segmentation**: Advanced video object segmentation with visual prompts
 - 🚀 **Self-Contained**: All SeC inference code bundled - no separate installation needed
-- 🎯 **Multiple Prompt Types**: Points, bounding boxes, masks, and text descriptions
+- 🎯 **Visual Prompts**: Points, bounding boxes, and masks
 - ⚡ **Bidirectional Tracking**: Track objects forward, backward, or both directions from any frame
-- 🧠 **Concept-Driven**: Adapts computational effort based on scene complexity
+- 🧠 **Concept-Driven**: Automatically understands object concepts using LVLMs for robust tracking
 
-## Quick Start Installation
+## Installation
 
-### 1. Copy Node Folder
-```bash
-# Copy the entire comfyui_sec_nodes folder to your ComfyUI custom_nodes directory
-cp -r comfyui_sec_nodes /path/to/ComfyUI/custom_nodes/
+### 1. Install Custom Node
+Copy the `comfyui_sec_nodes` folder to your ComfyUI custom_nodes directory:
+
+**Windows Portable:**
+```
+ComfyUI_windows_portable\ComfyUI\custom_nodes\comfyui_sec_nodes\
+```
+
+**Standard Install:**
+```
+ComfyUI\custom_nodes\comfyui_sec_nodes\
 ```
 
 ### 2. Install Dependencies
 ```bash
-# Install required Python packages
-pip install -r comfyui_sec_nodes/requirements.txt
+cd ComfyUI/custom_nodes/comfyui_sec_nodes
+pip install -r requirements.txt
 ```
 
-### 3. Download SeC Model
-Download the SeC model from [🤗HuggingFace](https://huggingface.co/OpenIXCLab/SeC-4B):
-```bash
-# Using huggingface_hub (recommended)
-pip install huggingface_hub
-python -c "from huggingface_hub import snapshot_download; snapshot_download('OpenIXCLab/SeC-4B', local_dir='./SeC-4B')"
+### 3. Download SeC Model to ComfyUI Models Folder
+The model should be placed in the standard ComfyUI models location:
 
-# Or using git lfs
+**Target Location:**
+```
+ComfyUI/models/sams/SeC-4B/
+```
+
+**Download using huggingface-cli (recommended):**
+```bash
+# Navigate to ComfyUI models/sams folder
+cd ComfyUI/models/sams
+
+# Download model
+huggingface-cli download OpenIXCLab/SeC-4B --local-dir SeC-4B
+```
+
+**Or using git lfs:**
+```bash
+cd ComfyUI/models/sams
 git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
 ```
 
+The node will automatically find the model at `models/sams/SeC-4B` (default path).
+
 ### 4. Restart ComfyUI
-That's it! The nodes will appear in the "SeC" category.
+The nodes will appear in the "SeC" category.
 
 ## Python Compatibility
 - ✅ **Python 3.10-3.12** supported
@@ -50,13 +71,14 @@ That's it! The nodes will appear in the "SeC" category.
 
 Loads SeC models and tokenizers for video segmentation.
 
-**Inputs:**
-- `model_path`: HuggingFace model ID or local path (default: "OpenIXCLab/SeC-4B")
-- `torch_dtype`: Data precision (bfloat16/float16/float32)
-- `use_flash_attn`: Enable Flash Attention 2 for speed
-- `device`: Target device (auto/cuda/cpu)  
-- `hydra_overrides`: Configuration overrides
-- `grounding_maskmem_num`: Memory frames for temporal consistency
+**Required Inputs:**
+- `model_path`: Path to SeC model (default: `models/sams/SeC-4B`)
+- `torch_dtype`: Data precision - `bfloat16` (recommended), `float16`, or `float32`
+- `device`: Target device - `auto` (recommended), `cuda`, or `cpu`
+
+**Optional Inputs:**
+- `use_flash_attn`: Enable Flash Attention 2 for ~2-3x faster inference (default: True)
+- `allow_mask_overlap`: Allow objects to overlap naturally (default: True). Disable for strictly separate objects.
 
 **Outputs:**
 - `model`: SeC model ready for inference
@@ -64,28 +86,25 @@ Loads SeC models and tokenizers for video segmentation.
 
 ### SeC Video Segmentation
 
-Advanced video object segmentation with concept-driven understanding.
+Concept-driven video object segmentation using automatic visual concept extraction.
 
 **Required Inputs:**
 - `model`: SeC model from model loader
 - `tokenizer`: SeC tokenizer from model loader
 - `frames`: Sequential video frames as IMAGE batch
-- `annotation_frame_idx`: Frame to annotate (0-based)
-- `object_id`: Unique object identifier
 
-**Prompt Inputs (choose one or more):**
-- `positive_points`: Positive clicks as "x1,y1;x2,y2"
-- `negative_points`: Negative clicks as "x1,y1;x2,y2"
-- `bbox`: Bounding box as "x_min,y_min,x_max,y_max"
-- `input_mask`: Binary mask image
-- `text_prompt`: Natural language description
+**Visual Prompts (provide at least one):**
+- `positive_points`: Positive clicks as JSON: `'[{"x": 100, "y": 200}]'`
+- `negative_points`: Negative clicks as JSON: `'[{"x": 50, "y": 50}]'`
+- `bbox`: Bounding box as `"x_min,y_min,x_max,y_max"`
+- `input_mask`: Binary mask from other segmentation nodes
 
-**Tracking Options:**
-- `tracking_direction`: "forward", "backward", or "bidirectional"
-- `start_frame_idx`: Start frame for propagation
-- `max_frames_to_track`: Frame limit (-1 for all)
-- `mllm_memory_size`: Frames in multimodal memory
-- `output_stride`: Output every N-th frame
+**Optional Settings:**
+- `tracking_direction`: `forward`, `backward`, or `bidirectional` (default: forward)
+- `annotation_frame_idx`: Frame where prompt is applied (default: 0) - Advanced
+- `object_id`: Unique ID for multi-object tracking (default: 1) - Advanced
+- `max_frames_to_track`: Max frames to process, -1 for all (default: -1) - Advanced
+- `mllm_memory_size`: Frames in multimodal memory (default: 7) - Advanced
 
 **Outputs:**
 - `masks`: Segmentation masks for each tracked frame
@@ -112,30 +131,29 @@ Advanced video object segmentation with concept-driven understanding.
 1. Load video frames
 2. Use **SeC Model Loader** with default settings
 3. **SeC Video Segmentation**:
-   - Positive points: "200,300"
+   - Positive points: `'[{"x": 200, "y": 300}]'`
    - Annotation frame: 0
-   - Tracking direction: "forward"
+   - Tracking direction: forward
 
 ### Middle Frame Bidirectional
 Perfect for clearest object view in middle:
-1. Load video frames  
+1. Load video frames
 2. **SeC Video Segmentation**:
-   - Positive points: "300,200"
+   - Positive points: `'[{"x": 300, "y": 200}]'`
    - **Annotation frame: 50** (middle frame)
-   - **Tracking direction: "bidirectional"**
+   - **Tracking direction: bidirectional**
    - Tracks entire video from clear middle frame
 
-### Text-Guided Segmentation
+### Bounding Box Segmentation
 1. **SeC Video Segmentation**:
-   - Text prompt: "person wearing red shirt"
-   - Annotation frame: 0
-   - Leverages concept understanding
+   - Bbox: `"100,50,400,350"`
+   - SeC automatically understands the object concept
 
-### Bounding Box + Text
+### Multiple Points
+Click multiple points on the same object:
 1. **SeC Video Segmentation**:
-   - Bbox: "100,50,400,350"
-   - Text prompt: "main character"
-   - Combines spatial and semantic cues
+   - Positive points: `'[{"x": 100, "y": 200}, {"x": 150, "y": 250}]'`
+   - More points = more robust tracking
 
 ## Technical Notes
 

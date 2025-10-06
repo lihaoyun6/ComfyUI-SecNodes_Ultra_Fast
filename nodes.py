@@ -22,8 +22,8 @@ class SeCModelLoader:
         return {
             "required": {
                 "model_path": ("STRING", {
-                    "default": "OpenIXCLab/SeC-4B",
-                    "tooltip": "HuggingFace model ID or local path to SeC model. Default is the official 4B parameter model."
+                    "default": "models/sams/SeC-4B",
+                    "tooltip": "Path to SeC model (relative to ComfyUI root) or HuggingFace model ID."
                 }),
                 "torch_dtype": (["bfloat16", "float16", "float32"], {
                     "default": "bfloat16",
@@ -37,11 +37,11 @@ class SeCModelLoader:
             "optional": {
                 "use_flash_attn": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Enable Flash Attention 2 for faster inference. Advanced option."
+                    "tooltip": "Enable Flash Attention 2 for faster inference."
                 }),
-                "hydra_overrides": ("STRING", {
-                    "default": "++model.non_overlap_masks=false",
-                    "tooltip": "Advanced: Hydra configuration overrides (comma-separated)."
+                "allow_mask_overlap": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Allow tracked objects to overlap. Disable for strictly separate objects."
                 })
             }
         }
@@ -52,7 +52,7 @@ class SeCModelLoader:
     CATEGORY = "SeC"
     TITLE = "SeC Model Loader"
     
-    def load_model(self, model_path, torch_dtype, device, use_flash_attn=True, hydra_overrides="++model.non_overlap_masks=false"):
+    def load_model(self, model_path, torch_dtype, device, use_flash_attn=True, allow_mask_overlap=True):
         """Load SeC model and tokenizer"""
         
         # Determine device
@@ -67,10 +67,12 @@ class SeCModelLoader:
         }
         torch_dtype = dtype_map[torch_dtype]
         
-        # Parse hydra overrides
+        # Build hydra overrides from allow_mask_overlap boolean
         hydra_overrides_extra = []
-        if hydra_overrides.strip():
-            hydra_overrides_extra = [override.strip() for override in hydra_overrides.split(",")]
+        # non_overlap_masks=true means masks DON'T overlap (enforced separation)
+        # non_overlap_masks=false means masks CAN overlap (default, natural behavior)
+        overlap_value = "false" if allow_mask_overlap else "true"
+        hydra_overrides_extra.append(f"++model.non_overlap_masks={overlap_value}")
         
         try:
             # Load configuration
