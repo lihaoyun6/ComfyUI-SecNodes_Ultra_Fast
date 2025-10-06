@@ -103,8 +103,13 @@ def build_sam2_video_predictor(
     # We need to use a recursive instantiation function that creates the nested components
     # but avoids Hydra's global import resolution for the top-level target
     def create_component(config_node):
-        """Recursively create components from config, handling _target_ manually"""
-        if OmegaConf.is_config(config_node):
+        """Recursively create components from config, handling all OmegaConf types properly"""
+        # Handle ListConfig (arrays)
+        if OmegaConf.is_list(config_node):
+            return [create_component(item) for item in config_node]
+        
+        # Handle DictConfig (objects)  
+        elif OmegaConf.is_dict(config_node):
             if '_target_' in config_node:
                 target = config_node._target_
                 # Remove the _target_ key and get remaining kwargs
@@ -119,14 +124,18 @@ def build_sam2_video_predictor(
                 else:
                     # Use importlib for other components
                     import importlib
-                    module = importlib.import_module(module_path)
-                    cls = getattr(module, class_name)
-                    return cls(**kwargs)
+                    try:
+                        module = importlib.import_module(module_path)
+                        cls = getattr(module, class_name)
+                        return cls(**kwargs)
+                    except (ImportError, AttributeError) as e:
+                        raise RuntimeError(f"Failed to instantiate {target}: {e}")
             else:
                 # It's a config dict without _target_, recursively process items
                 return {k: create_component(v) for k, v in config_node.items()}
+        
+        # Handle primitive values (strings, numbers, booleans, None)
         else:
-            # It's a primitive value, return as-is
             return config_node
     
     # Create the model using our custom instantiation
