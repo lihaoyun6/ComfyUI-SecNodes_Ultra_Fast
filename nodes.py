@@ -146,19 +146,35 @@ class SeCModelLoader:
                         if module_dtype is None:
                             return args, kwargs
 
-                        # Convert all tensor arguments
+                        # Skip conversion for Embedding layers - they need integer indices
+                        if isinstance(module, torch.nn.Embedding):
+                            return args, kwargs
+
+                        # Convert all tensor arguments (but preserve integer dtypes)
                         new_args = []
                         for arg in args:
-                            if isinstance(arg, torch.Tensor) and arg.dtype != module_dtype:
-                                new_args.append(arg.to(dtype=module_dtype))
+                            if isinstance(arg, torch.Tensor):
+                                # Don't convert integer tensors (indices for embeddings, etc.)
+                                if arg.dtype in [torch.long, torch.int, torch.int32, torch.int64]:
+                                    new_args.append(arg)
+                                elif arg.dtype != module_dtype:
+                                    new_args.append(arg.to(dtype=module_dtype))
+                                else:
+                                    new_args.append(arg)
                             else:
                                 new_args.append(arg)
 
-                        # Convert all tensor keyword arguments
+                        # Convert all tensor keyword arguments (but preserve integer dtypes)
                         new_kwargs = {}
                         for k, v in kwargs.items():
-                            if isinstance(v, torch.Tensor) and v.dtype != module_dtype:
-                                new_kwargs[k] = v.to(dtype=module_dtype)
+                            if isinstance(v, torch.Tensor):
+                                # Don't convert integer tensors
+                                if v.dtype in [torch.long, torch.int, torch.int32, torch.int64]:
+                                    new_kwargs[k] = v
+                                elif v.dtype != module_dtype:
+                                    new_kwargs[k] = v.to(dtype=module_dtype)
+                                else:
+                                    new_kwargs[k] = v
                             else:
                                 new_kwargs[k] = v
 
