@@ -9,7 +9,6 @@ import torch.nn.functional as F
 from torch.nn.init import trunc_normal_
 from tqdm import tqdm
 
-from hydra.utils import instantiate
 from omegaconf import OmegaConf
 
 from .sam2.sam2_video_predictor import SAM2VideoPredictor as _SAM2VideoPredictor
@@ -100,7 +99,39 @@ def build_sam2_video_predictor(
                 current[keys[-1]] = value
 
     OmegaConf.resolve(cfg)
-    model = instantiate(cfg.model, _recursive_=True)
+    
+    # We need to use a recursive instantiation function that creates the nested components
+    # but avoids Hydra's global import resolution for the top-level target
+    def create_component(config_node):
+        """Recursively create components from config, handling _target_ manually"""
+        if OmegaConf.is_config(config_node):
+            if '_target_' in config_node:
+                target = config_node._target_
+                # Remove the _target_ key and get remaining kwargs
+                kwargs = {k: create_component(v) for k, v in config_node.items() if k != '_target_'}
+                
+                # Import and instantiate the target class
+                module_path, class_name = target.rsplit('.', 1)
+                
+                # Handle special case for our local SAM2VideoPredictor
+                if target == "inference.sam2_video_predictor.SAM2VideoPredictor":
+                    return SAM2VideoPredictor(**kwargs)
+                else:
+                    # Use importlib for other components
+                    import importlib
+                    module = importlib.import_module(module_path)
+                    cls = getattr(module, class_name)
+                    return cls(**kwargs)
+            else:
+                # It's a config dict without _target_, recursively process items
+                return {k: create_component(v) for k, v in config_node.items()}
+        else:
+            # It's a primitive value, return as-is
+            return config_node
+    
+    # Create the model using our custom instantiation
+    model = create_component(cfg.model)
+    
     return model
 
 class SAM2VideoPredictor(_SAM2VideoPredictor):
