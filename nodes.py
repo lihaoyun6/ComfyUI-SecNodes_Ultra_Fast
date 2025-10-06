@@ -230,10 +230,6 @@ class SeCVideoSegmentation:
                 "input_mask": ("MASK", {
                     "tooltip": "Binary mask for object initialization"
                 }),
-                "text_prompt": ("STRING", {
-                    "default": "",
-                    "tooltip": "Natural language description for semantic reasoning. Requires visual prompt for initialization."
-                }),
                 "tracking_direction": (["forward", "backward", "bidirectional"], {
                     "default": "forward",
                     "tooltip": "Tracking direction from annotation frame"
@@ -267,8 +263,8 @@ class SeCVideoSegmentation:
     FUNCTION = "segment_video"
     CATEGORY = "SeC"
     TITLE = "SeC Video Segmentation"
-    DESCRIPTION = ("Concept-driven video object segmentation that intelligently combines visual features with semantic reasoning. "
-                   "Supports points, bounding boxes, masks, and text prompts. Adapts computational effort based on scene complexity.")
+    DESCRIPTION = ("Concept-driven video object segmentation using Large Vision-Language Models for visual concept extraction. "
+                   "Provide visual prompts (points/bbox/mask) and SeC automatically understands the object concept for robust tracking.")
     
     def parse_points(self, points_str):
         """Parse point coordinates from JSON string: '[{\"x\": 63, \"y\": 782}]'"""
@@ -370,7 +366,7 @@ class SeCVideoSegmentation:
         return temp_dir, frame_paths
     
     def segment_video(self, model, tokenizer, frames, positive_points="", negative_points="",
-                     bbox="", input_mask=None, text_prompt="", tracking_direction="forward",
+                     bbox="", input_mask=None, tracking_direction="forward",
                      annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=7):
         """Perform video object segmentation"""
         
