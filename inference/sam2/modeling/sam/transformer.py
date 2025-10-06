@@ -106,6 +106,16 @@ class TwoWayTransformer(nn.Module):
           torch.Tensor: the processed point_embedding
           torch.Tensor: the processed image_embedding
         """
+        # Ensure all inputs have the same dtype as the model weights
+        # This prevents dtype mismatch errors when using bfloat16/float16
+        try:
+            model_dtype = next(self.parameters()).dtype
+            image_embedding = image_embedding.to(dtype=model_dtype)
+            image_pe = image_pe.to(dtype=model_dtype)
+            point_embedding = point_embedding.to(dtype=model_dtype)
+        except StopIteration:
+            pass  # No parameters, skip dtype conversion
+
         # BxCxHxW -> BxHWxC == B x N_image_tokens x C
         bs, c, h, w = image_embedding.shape
         image_embedding = image_embedding.flatten(2).permute(0, 2, 1)
@@ -264,6 +274,15 @@ class Attention(nn.Module):
         return x.reshape(b, n_tokens, n_heads * c_per_head)  # B x N_tokens x C
 
     def forward(self, q: Tensor, k: Tensor, v: Tensor) -> Tensor:
+        # Ensure all inputs have the same dtype as projection weights
+        try:
+            model_dtype = self.q_proj.weight.dtype
+            q = q.to(dtype=model_dtype)
+            k = k.to(dtype=model_dtype)
+            v = v.to(dtype=model_dtype)
+        except Exception:
+            pass  # Skip if unable to determine dtype
+
         # Input projections
         q = self.q_proj(q)
         k = self.k_proj(k)
