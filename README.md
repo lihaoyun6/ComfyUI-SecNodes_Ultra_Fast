@@ -1,15 +1,32 @@
 # ComfyUI SeC Nodes
 
-**Self-contained** ComfyUI custom nodes for **SeC (Segment Concept)** - a concept-driven video object segmentation framework using Large Vision-Language Models for automatic visual concept extraction.
+**Self-contained** ComfyUI custom nodes for **SeC (Segment Concept)** - State-of-the-art video object segmentation that outperforms SAM 2.1.
+
+## What is SeC?
+
+**SeC (Segment Concept)** is a breakthrough in video object segmentation that shifts from simple feature matching to **high-level conceptual understanding**. Unlike SAM 2.1 which relies primarily on visual similarity, SeC uses a **Large Vision-Language Model (LVLM)** to understand *what* an object is conceptually, enabling robust tracking through:
+
+- 🧠 **Semantic Understanding**: Recognizes objects by concept, not just appearance
+- 🎯 **Scene Complexity Adaptation**: Automatically balances semantic reasoning vs feature matching
+- 💪 **Superior Robustness**: Handles occlusions, appearance changes, and complex scenes better than SAM 2.1
+- 📊 **SOTA Performance**: +11.8 points over SAM 2.1 on SeCVOS benchmark
+
+### How SeC Works
+
+1. **Visual Grounding**: You provide initial prompts (points/bbox/mask) on one frame
+2. **Concept Extraction**: SeC's LVLM analyzes the object to build a semantic understanding
+3. **Smart Tracking**: Dynamically uses both semantic reasoning and visual features
+4. **Keyframe Bank**: Maintains diverse views of the object for robust concept understanding
+
+The result? SeC tracks objects more reliably through challenging scenarios like rapid appearance changes, occlusions, and complex multi-object scenes.
 
 ## Features
 
-- 🔥 **SeC Model Loader**: Load SeC models with simple, intuitive settings
-- 🔥 **SeC Video Segmentation**: Advanced video object segmentation with visual prompts
-- 🚀 **Self-Contained**: All SeC inference code bundled - no separate installation needed
-- 🎯 **Visual Prompts**: Points, bounding boxes, and masks
-- ⚡ **Bidirectional Tracking**: Track objects forward, backward, or both directions from any frame
-- 🧠 **Concept-Driven**: Automatically understands object concepts using LVLMs for robust tracking
+- 🔥 **SeC Model Loader**: Load SeC models with simple settings
+- 🎯 **SeC Video Segmentation**: SOTA video segmentation with visual prompts
+- 🎨 **Coordinate Plotter**: Visualize coordinate points before segmentation
+- 🚀 **Self-Contained**: All inference code bundled - no external repos needed
+- ⚡ **Bidirectional Tracking**: Track from any frame in any direction
 
 ## Installation
 
@@ -60,118 +77,148 @@ The node will automatically find the model at `models/sams/SeC-4B` (default path
 ### 4. Restart ComfyUI
 The nodes will appear in the "SeC" category.
 
-## Python Compatibility
-- ✅ **Python 3.10-3.12** supported
-- ✅ **Works with existing ComfyUI environments**  
-- ✅ **No separate conda environment needed**
+## Nodes Reference
 
-## Nodes
+### 1. SeC Model Loader
+Load and configure the SeC model for inference.
 
-### SeC Model Loader
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| **model_path** | STRING | `models/sams/SeC-4B` | Path to model or HuggingFace ID |
+| **torch_dtype** | CHOICE | `bfloat16` | Precision: bfloat16 (recommended), float16, float32 |
+| **device** | CHOICE | `auto` | Device: auto, cuda, cpu |
+| *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference |
+| *allow_mask_overlap* | BOOLEAN | True | Allow objects to overlap (disable for strict separation) |
 
-Loads SeC models and tokenizers for video segmentation.
+**Outputs:** `model`, `tokenizer`
 
-**Required Inputs:**
-- `model_path`: Path to SeC model (default: `models/sams/SeC-4B`)
-- `torch_dtype`: Data precision - `bfloat16` (recommended), `float16`, or `float32`
-- `device`: Target device - `auto` (recommended), `cuda`, or `cpu`
+---
 
-**Optional Inputs:**
-- `use_flash_attn`: Enable Flash Attention 2 for ~2-3x faster inference (default: True)
-- `allow_mask_overlap`: Allow objects to overlap naturally (default: True). Disable for strictly separate objects.
+### 2. SeC Video Segmentation
+Segment and track objects across video frames.
 
-**Outputs:**
-- `model`: SeC model ready for inference
-- `tokenizer`: SeC tokenizer
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| **model** | MODEL | - | SeC model from loader |
+| **tokenizer** | TOKENIZER | - | SeC tokenizer from loader |
+| **frames** | IMAGE | - | Video frames as IMAGE batch |
+| *positive_points* | STRING | "" | JSON: `'[{"x": 100, "y": 200}]'` |
+| *negative_points* | STRING | "" | JSON: `'[{"x": 50, "y": 50}]'` |
+| *bbox* | STRING | "" | Bounding box: `"x1,y1,x2,y2"` |
+| *input_mask* | MASK | - | Binary mask input |
+| *tracking_direction* | CHOICE | `forward` | forward / backward / bidirectional |
+| *annotation_frame_idx* | INT | 0 | Frame where prompt is applied |
+| *object_id* | INT | 1 | Unique ID for multi-object tracking |
+| *max_frames_to_track* | INT | -1 | Max frames (-1 = all) |
+| *mllm_memory_size* | INT | 7 | Semantic memory size |
 
-### SeC Video Segmentation
+**Outputs:** `masks` (MASK), `object_ids` (INT)
 
-Concept-driven video object segmentation using automatic visual concept extraction.
+**Note:** Provide at least one visual prompt (points, bbox, or mask).
 
-**Required Inputs:**
-- `model`: SeC model from model loader
-- `tokenizer`: SeC tokenizer from model loader
-- `frames`: Sequential video frames as IMAGE batch
+---
 
-**Visual Prompts (provide at least one):**
-- `positive_points`: Positive clicks as JSON: `'[{"x": 100, "y": 200}]'`
-- `negative_points`: Negative clicks as JSON: `'[{"x": 50, "y": 50}]'`
-- `bbox`: Bounding box as `"x_min,y_min,x_max,y_max"`
-- `input_mask`: Binary mask from other segmentation nodes
+### 3. Coordinate Plotter
+Visualize coordinate points on images for debugging.
 
-**Optional Settings:**
-- `tracking_direction`: `forward`, `backward`, or `bidirectional` (default: forward)
-- `annotation_frame_idx`: Frame where prompt is applied (default: 0) - Advanced
-- `object_id`: Unique ID for multi-object tracking (default: 1) - Advanced
-- `max_frames_to_track`: Max frames to process, -1 for all (default: -1) - Advanced
-- `mllm_memory_size`: Frames in multimodal memory (default: 7) - Advanced
+| Parameter | Type | Default | Description |
+|-----------|------|---------|-------------|
+| **coordinates** | STRING | `'[{"x": 100, "y": 100}]'` | JSON coordinates to plot |
+| *image* | IMAGE | - | Optional image (overrides width/height) |
+| *point_shape* | CHOICE | `circle` | circle / square / triangle |
+| *point_size* | INT | 10 | Point size in pixels (1-100) |
+| *point_color* | STRING | `#00FF00` | Hex `#FF0000` or RGB `255,0,0` |
+| *width* | INT | 512 | Canvas width if no image |
+| *height* | INT | 512 | Canvas height if no image |
 
-**Outputs:**
-- `masks`: Segmentation masks for each tracked frame
-- `object_ids`: Object IDs corresponding to masks
+**Outputs:** `image` (IMAGE)
+
+## Quick Start Examples
+
+### Basic Workflow
+```
+1. SeC Model Loader (default settings)
+   └─→ model, tokenizer
+
+2. Load Video Frames
+   └─→ frames
+
+3. SeC Video Segmentation
+   ├─ model: from (1)
+   ├─ tokenizer: from (1)
+   ├─ frames: from (2)
+   └─ positive_points: '[{"x": 200, "y": 300}]'
+
+   └─→ masks (ready for VideoCombine, etc.)
+```
+
+### With Coordinate Visualization
+```
+1. Load Image (first frame)
+   └─→ image
+
+2. Coordinate Plotter
+   ├─ coordinates: '[{"x": 200, "y": 300}]'
+   ├─ image: from (1)
+   └─ point_color: "#FF0000"
+
+   └─→ Preview image (verify point placement)
+
+3. Use same coordinates in SeC Video Segmentation
+```
+
+### Bidirectional Tracking (Best for Complex Videos)
+```
+SeC Video Segmentation:
+  └─ annotation_frame_idx: 25  (clear frame in middle)
+  └─ tracking_direction: bidirectional
+  └─ positive_points: '[{"x": 300, "y": 200}]'
+
+Result: Tracks from frame 25 → forward to end AND backward to start
+```
 
 ## Tracking Directions
 
-### 🔄 **Bidirectional Tracking** (Recommended)
-- **Use case**: Object clearest in middle of video
-- **How**: Annotate clear middle frame, tracks both directions automatically
-- **Example**: Frame 50 annotation → tracks frames 0-99
+| Direction | Best For | Behavior |
+|-----------|----------|----------|
+| **forward** | Standard videos, object appears at start | Frame N → end |
+| **backward** | Object appears later, reverse analysis | Frame N → start |
+| **bidirectional** | Object clearest in middle, complex scenes | Frame N → both directions |
 
-### ➡️ **Forward Tracking** 
-- **Use case**: Standard chronological tracking
-- **How**: From annotation frame to end of video
+## Performance Comparison
 
-### ⬅️ **Backward Tracking**
-- **Use case**: Reverse temporal analysis  
-- **How**: From annotation frame to beginning of video
+| Model | DAVIS 2017 | MOSE | SA-V | SeCVOS |
+|-------|------------|------|------|--------|
+| SAM 2.1 | 90.6 | 74.5 | 78.6 | **58.2** |
+| SAM2Long | 91.4 | 75.2 | 81.1 | 62.3 |
+| **SeC** | **91.3** | **75.3** | **82.7** | **70.0** |
 
-## Usage Examples
-
-### Basic Point Segmentation
-1. Load video frames
-2. Use **SeC Model Loader** with default settings
-3. **SeC Video Segmentation**:
-   - Positive points: `'[{"x": 200, "y": 300}]'`
-   - Annotation frame: 0
-   - Tracking direction: forward
-
-### Middle Frame Bidirectional
-Perfect for clearest object view in middle:
-1. Load video frames
-2. **SeC Video Segmentation**:
-   - Positive points: `'[{"x": 300, "y": 200}]'`
-   - **Annotation frame: 50** (middle frame)
-   - **Tracking direction: bidirectional**
-   - Tracks entire video from clear middle frame
-
-### Bounding Box Segmentation
-1. **SeC Video Segmentation**:
-   - Bbox: `"100,50,400,350"`
-   - SeC automatically understands the object concept
-
-### Multiple Points
-Click multiple points on the same object:
-1. **SeC Video Segmentation**:
-   - Positive points: `'[{"x": 100, "y": 200}, {"x": 150, "y": 250}]'`
-   - More points = more robust tracking
-
-## Technical Notes
-
-- **Self-contained**: All SeC inference code bundled in node
-- **No git clone needed**: Everything included in node folder
-- **Automatic optimization**: Adapts computation based on scene complexity
-- **Memory management**: Configurable memory size for long videos
-- **Multiple architectures**: Supports various LLM backbones internally
-
-## Links
-- **SeC Paper**: [arXiv:2507.15852](https://arxiv.org/abs/2507.15852)
-- **SeC Model**: [🤗 HuggingFace](https://huggingface.co/OpenIXCLab/SeC-4B)
-- **SeC Dataset**: [🤗 SeCVOS Dataset](https://huggingface.co/datasets/OpenIXCLab/SeCVOS)
-- **Original Repository**: [GitHub - SeC](https://github.com/OpenIXCLab/SeC)
+SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS).
 
 ## Requirements
-- PyTorch (likely already with ComfyUI)
-- Python packages listed in requirements.txt
-- CUDA GPU recommended for performance
 
-The nodes are **completely self-contained** - just install dependencies and start segmenting! 🎉
+- **Python**: 3.10-3.12
+- **PyTorch**: Included with ComfyUI
+- **CUDA GPU**: Recommended (CPU supported but slow)
+- **VRAM**: ~16GB for SeC-4B model with bfloat16
+
+## Links & Resources
+
+- 📄 **Paper**: [arXiv:2507.15852](https://arxiv.org/abs/2507.15852)
+- 🤗 **Model**: [OpenIXCLab/SeC-4B](https://huggingface.co/OpenIXCLab/SeC-4B)
+- 📊 **Dataset**: [SeCVOS Benchmark](https://huggingface.co/datasets/OpenIXCLab/SeCVOS)
+- 💻 **Original Repo**: [GitHub - SeC](https://github.com/OpenIXCLab/SeC)
+
+## Troubleshooting
+
+**Model not found**: Ensure model is at `ComfyUI/models/sams/SeC-4B/`
+
+**CUDA out of memory**: Try `float16` or reduce `mllm_memory_size`
+
+**Slow inference**: Enable `use_flash_attn` (requires Flash Attention 2)
+
+**Empty masks**: Provide clearer visual prompts or try different frame
+
+---
+
+*Self-contained ComfyUI nodes - just install and segment!* 🎉
