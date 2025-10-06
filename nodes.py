@@ -535,6 +535,174 @@ class SeCVideoSegmentation:
                 shutil.rmtree(video_dir)
             
             return (masks_tensor, obj_ids_tensor)
-            
+
         except Exception as e:
             raise RuntimeError(f"SeC video segmentation failed: {str(e)}")
+
+
+class CoordinatePlotter:
+    """
+    ComfyUI node for visualizing coordinates on images
+    """
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {
+            "required": {
+                "coordinates": ("STRING", {
+                    "default": '[{"x": 100, "y": 100}]',
+                    "tooltip": "JSON coordinates to plot: '[{\"x\": 100, \"y\": 200}]'"
+                })
+            },
+            "optional": {
+                "image": ("IMAGE", {
+                    "tooltip": "Optional image to plot on. If provided, overrides width/height."
+                }),
+                "point_shape": (["circle", "square", "triangle"], {
+                    "default": "circle",
+                    "tooltip": "Shape to draw for each coordinate point"
+                }),
+                "point_size": ("INT", {
+                    "default": 10,
+                    "min": 1,
+                    "max": 100,
+                    "tooltip": "Size of points in pixels"
+                }),
+                "point_color": ("STRING", {
+                    "default": "#00FF00",
+                    "tooltip": "Point color as hex '#FF0000' or RGB '255,0,0'"
+                }),
+                "width": ("INT", {
+                    "default": 512,
+                    "min": 64,
+                    "max": 4096,
+                    "tooltip": "Canvas width (ignored if image provided)"
+                }),
+                "height": ("INT", {
+                    "default": 512,
+                    "min": 64,
+                    "max": 4096,
+                    "tooltip": "Canvas height (ignored if image provided)"
+                })
+            }
+        }
+
+    RETURN_TYPES = ("IMAGE",)
+    RETURN_NAMES = ("image",)
+    FUNCTION = "plot_coordinates"
+    CATEGORY = "SeC"
+    TITLE = "Coordinate Plotter"
+    DESCRIPTION = "Visualize coordinate points on an image or blank canvas. Useful for previewing point selections."
+
+    def parse_color(self, color_str):
+        """Parse hex or RGB color string to BGR tuple for OpenCV"""
+        import re
+
+        color_str = color_str.strip()
+
+        # Try hex format: #RRGGBB or RRGGBB
+        if color_str.startswith('#'):
+            color_str = color_str[1:]
+
+        if re.match(r'^[0-9A-Fa-f]{6}$', color_str):
+            # Hex color
+            r = int(color_str[0:2], 16)
+            g = int(color_str[2:4], 16)
+            b = int(color_str[4:6], 16)
+            return (b, g, r)  # OpenCV uses BGR
+
+        # Try RGB format: "255,0,0" or "255, 0, 0"
+        if ',' in color_str:
+            parts = [int(x.strip()) for x in color_str.split(',')]
+            if len(parts) == 3:
+                r, g, b = parts
+                return (b, g, r)  # OpenCV uses BGR
+
+        # Default to green if parsing fails
+        return (0, 255, 0)
+
+    def draw_shape(self, canvas, x, y, shape, size, color):
+        """Draw a shape at the specified coordinates"""
+        import cv2
+        import numpy as np
+
+        x, y = int(x), int(y)
+
+        if shape == "circle":
+            cv2.circle(canvas, (x, y), size, color, -1)
+            # Add white border for visibility
+            cv2.circle(canvas, (x, y), size, (255, 255, 255), 2)
+
+        elif shape == "square":
+            half_size = size
+            cv2.rectangle(canvas,
+                         (x - half_size, y - half_size),
+                         (x + half_size, y + half_size),
+                         color, -1)
+            # Add white border
+            cv2.rectangle(canvas,
+                         (x - half_size, y - half_size),
+                         (x + half_size, y + half_size),
+                         (255, 255, 255), 2)
+
+        elif shape == "triangle":
+            # Equilateral triangle pointing up
+            height = int(size * 1.732)  # sqrt(3) * size
+            half_base = size
+
+            pts = np.array([
+                [x, y - height],           # Top
+                [x - half_base, y + size], # Bottom left
+                [x + half_base, y + size]  # Bottom right
+            ], np.int32)
+
+            cv2.fillPoly(canvas, [pts], color)
+            # Add white border
+            cv2.polylines(canvas, [pts], True, (255, 255, 255), 2)
+
+    def plot_coordinates(self, coordinates, image=None, point_shape="circle",
+                        point_size=10, point_color="#00FF00", width=512, height=512):
+        """Plot coordinates on image or blank canvas"""
+        import json
+        import cv2
+        import numpy as np
+
+        try:
+            # Parse coordinates
+            if not coordinates or not coordinates.strip():
+                coords_list = []
+            else:
+                coords_list = json.loads(coordinates)
+                if not isinstance(coords_list, list):
+                    raise ValueError("Coordinates must be a JSON array")
+
+            # Create or use canvas
+            if image is not None:
+                # Use provided image - convert from ComfyUI format [B, H, W, C] to numpy
+                canvas = (image[0].cpu().numpy() * 255).astype(np.uint8)
+                canvas = cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR)
+            else:
+                # Create blank black canvas
+                canvas = np.zeros((height, width, 3), dtype=np.uint8)
+
+            # Parse color
+            color = self.parse_color(point_color)
+
+            # Draw each coordinate
+            for coord in coords_list:
+                if isinstance(coord, dict) and 'x' in coord and 'y' in coord:
+                    x = float(coord['x'])
+                    y = float(coord['y'])
+                    self.draw_shape(canvas, x, y, point_shape, point_size, color)
+
+            # Convert back to ComfyUI format
+            canvas = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
+            canvas = canvas.astype(np.float32) / 255.0
+            output = torch.from_numpy(canvas).unsqueeze(0)  # Add batch dimension
+
+            return (output,)
+
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON coordinates: {str(e)}")
+        except Exception as e:
+            raise RuntimeError(f"Coordinate plotting failed: {str(e)}")

@@ -7,11 +7,13 @@ from .nodes import *
 NODE_CLASS_MAPPINGS = {
     "SeCModelLoader": SeCModelLoader,
     "SeCVideoSegmentation": SeCVideoSegmentation,
+    "CoordinatePlotter": CoordinatePlotter,
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
     "SeCModelLoader": "SeC Model Loader",
     "SeCVideoSegmentation": "SeC Video Segmentation",
+    "CoordinatePlotter": "Coordinate Plotter",
 }
 
 __all__ = ["NODE_CLASS_MAPPINGS", "NODE_DISPLAY_NAME_MAPPINGS"]
