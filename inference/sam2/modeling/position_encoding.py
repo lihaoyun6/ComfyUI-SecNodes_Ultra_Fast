@@ -139,7 +139,9 @@ class PositionEmbeddingRandom(nn.Module):
         """Generate positional encoding for a grid of the specified size."""
         h, w = size
         device: Any = self.positional_encoding_gaussian_matrix.device
-        grid = torch.ones((h, w), device=device, dtype=torch.float32)
+        # Use the same dtype as the positional encoding matrix to avoid dtype mismatch
+        dtype = self.positional_encoding_gaussian_matrix.dtype
+        grid = torch.ones((h, w), device=device, dtype=dtype)
         y_embed = grid.cumsum(dim=0) - 0.5
         x_embed = grid.cumsum(dim=1) - 0.5
         y_embed = y_embed / h
