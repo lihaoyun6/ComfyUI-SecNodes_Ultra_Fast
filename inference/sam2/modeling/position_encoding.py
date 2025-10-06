@@ -155,7 +155,9 @@ class PositionEmbeddingRandom(nn.Module):
         coords = coords_input.clone()
         coords[:, :, 0] = coords[:, :, 0] / image_size[1]
         coords[:, :, 1] = coords[:, :, 1] / image_size[0]
-        return self._pe_encoding(coords.to(torch.float))  # B x N x C
+        # Convert to the same dtype as the positional encoding matrix
+        target_dtype = self.positional_encoding_gaussian_matrix.dtype
+        return self._pe_encoding(coords.to(dtype=target_dtype))  # B x N x C
 
 
 # Rotary Positional Encoding, adapted from:
