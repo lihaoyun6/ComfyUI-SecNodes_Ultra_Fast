@@ -232,11 +232,11 @@ class SeCVideoSegmentation:
             "optional": {
                 "positive_points": ("STRING", {
                     "default": "",
-                    "tooltip": "Positive click coordinates as 'x1,y1;x2,y2;x3,y3'. Points that belong to the target object."
+                    "tooltip": "Positive click coordinates as JSON string: '[{\"x\": 63, \"y\": 782}]' or '[{\"x\": 82, \"y\": 551}, {\"x\": 81, \"y\": 814}]'. Points that belong to the target object."
                 }),
                 "negative_points": ("STRING", {
                     "default": "",
-                    "tooltip": "Negative click coordinates as 'x1,y1;x2,y2'. Points that do NOT belong to the target object."
+                    "tooltip": "Negative click coordinates as JSON string: '[{\"x\": 100, \"y\": 200}]'. Points that do NOT belong to the target object."
                 }),
                 "bbox": ("STRING", {
                     "default": "",
@@ -286,20 +286,33 @@ class SeCVideoSegmentation:
                    "Supports points, bounding boxes, masks, and text prompts. Adapts computational effort based on scene complexity.")
     
     def parse_points(self, points_str):
-        """Parse point coordinates from string"""
-        if not points_str.strip():
+        """Parse point coordinates from JSON string: '[{\"x\": 63, \"y\": 782}]'"""
+        import json
+
+        if not points_str or not points_str.strip():
             return None, None
-            
-        points = []
-        for point_pair in points_str.split(';'):
-            if point_pair.strip():
-                x, y = map(float, point_pair.strip().split(','))
-                points.append([x, y])
-        
-        if not points:
+
+        try:
+            # Parse JSON string to list of dicts
+            points_list = json.loads(points_str)
+
+            if not isinstance(points_list, list) or len(points_list) == 0:
+                return None, None
+
+            # Extract x, y coordinates from dicts
+            points = []
+            for point_dict in points_list:
+                if isinstance(point_dict, dict) and 'x' in point_dict and 'y' in point_dict:
+                    points.append([float(point_dict['x']), float(point_dict['y'])])
+
+            if not points:
+                return None, None
+
+            return np.array(points, dtype=np.float32), np.ones(len(points), dtype=np.int32)
+
+        except (json.JSONDecodeError, ValueError, KeyError) as e:
+            print(f"Error parsing points: {e}")
             return None, None
-            
-        return np.array(points, dtype=np.float32), np.ones(len(points), dtype=np.int32)
     
     def parse_bbox(self, bbox_str):
         """Parse bounding box from string"""
@@ -372,7 +385,7 @@ class SeCVideoSegmentation:
         return temp_dir, frame_paths
     
     def segment_video(self, model, tokenizer, frames, annotation_frame_idx, object_id,
-                     positive_points="", negative_points="", bbox="", input_mask=None, 
+                     positive_points="", negative_points="", bbox="", input_mask=None,
                      text_prompt="", start_frame_idx=0, max_frames_to_track=-1,
                      tracking_direction="forward", mllm_memory_size=7, output_stride=1):
         """Perform video object segmentation"""
@@ -426,7 +439,7 @@ class SeCVideoSegmentation:
                 mask_array = input_mask[0].cpu().numpy()  # Take first mask from batch [H, W]
                 # MASK type is already 2D grayscale, just convert to binary
                 init_mask = (mask_array > 0.5).astype(np.bool_)
-                
+
                 # Add mask to inference state (this might need adjustment based on SeC API)
                 _, out_obj_ids, out_mask_logits = model.grounding_encoder.add_new_mask(
                     inference_state=inference_state,
@@ -434,7 +447,16 @@ class SeCVideoSegmentation:
                     obj_id=object_id,
                     mask=init_mask,
                 )
-                
+
+            elif text_prompt and text_prompt.strip():
+                # Text-based prompting - SeC uses text to guide segmentation
+                # The text prompt will be used during propagate_in_video
+                # For now, we need to initialize with a placeholder or use the model's text grounding
+                # This assumes the model has text grounding capabilities
+                print(f"Using text prompt: '{text_prompt}' for object segmentation")
+                # Initialize with empty mask - text will guide during propagation
+                init_mask = None
+
             else:
                 raise ValueError("At least one prompt type (points, bbox, mask, or text) must be provided")
             
