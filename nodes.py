@@ -242,8 +242,8 @@ class SeCVideoSegmentation:
                     "default": "",
                     "tooltip": "Bounding box as 'x_min,y_min,x_max,y_max'. Rectangular region containing the target object."
                 }),
-                "input_mask": ("IMAGE", {
-                    "tooltip": "Binary mask image for precise object initialization. White pixels indicate the target object."
+                "input_mask": ("MASK", {
+                    "tooltip": "Binary mask for precise object initialization. Use mask output from other segmentation nodes."
                 }),
                 "text_prompt": ("STRING", {
                     "default": "",
@@ -277,7 +277,7 @@ class SeCVideoSegmentation:
             }
         }
     
-    RETURN_TYPES = ("IMAGE", "INT")
+    RETURN_TYPES = ("MASK", "INT")
     RETURN_NAMES = ("masks", "object_ids") 
     FUNCTION = "segment_video"
     CATEGORY = "SeC"
@@ -342,16 +342,15 @@ class SeCVideoSegmentation:
         return tensor
     
     def mask_to_tensor(self, mask_array):
-        """Convert numpy mask to tensor"""
-        # Ensure mask is in correct format
-        if mask_array.ndim == 2:
-            mask_array = mask_array[..., np.newaxis]
-        
-        # Convert boolean mask to float and repeat for RGB channels
+        """Convert numpy mask to ComfyUI MASK tensor (2D grayscale)"""
+        # Handle multi-dimensional arrays by taking first channel/frame
+        if mask_array.ndim > 2:
+            # If 3D or 4D, take first channel (assumes grayscale or first channel contains mask)
+            mask_array = mask_array[..., 0] if mask_array.shape[-1] <= 4 else mask_array[0]
+
+        # Convert to 2D float tensor [H, W] - ComfyUI MASK format
         mask_tensor = torch.from_numpy(mask_array.astype(np.float32))
-        if mask_tensor.shape[-1] == 1:
-            mask_tensor = mask_tensor.repeat(1, 1, 3)
-        
+
         return mask_tensor
     
     def save_frames_temporarily(self, pil_images, temp_dir="/tmp/sec_frames"):
@@ -422,12 +421,11 @@ class SeCVideoSegmentation:
                 init_mask = (out_mask_logits[0] > 0.0).cpu().numpy()
                 
             elif input_mask is not None:
-                # Use provided mask
+                # Use provided mask (MASK type is [batch, H, W])
                 # Convert mask tensor to numpy
-                mask_array = input_mask[0].cpu().numpy()  # Take first image if batch
-                if mask_array.shape[-1] == 3:  # RGB mask
-                    mask_array = mask_array[:, :, 0] > 0.5  # Convert to binary
-                init_mask = mask_array.astype(np.bool_)
+                mask_array = input_mask[0].cpu().numpy()  # Take first mask from batch [H, W]
+                # MASK type is already 2D grayscale, just convert to binary
+                init_mask = (mask_array > 0.5).astype(np.bool_)
                 
                 # Add mask to inference state (this might need adjustment based on SeC API)
                 _, out_obj_ids, out_mask_logits = model.grounding_encoder.add_new_mask(
@@ -528,8 +526,8 @@ class SeCVideoSegmentation:
                         output_obj_ids.append(obj_id)
             
             if not output_masks:
-                # Return empty mask if no results
-                empty_mask = torch.zeros(frames.shape[1], frames.shape[2], 3)
+                # Return empty mask if no results (2D grayscale for MASK type)
+                empty_mask = torch.zeros(frames.shape[1], frames.shape[2])
                 output_masks = [empty_mask]
                 output_obj_ids = [0]
             
