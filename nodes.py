@@ -44,8 +44,8 @@ class SeCModelLoader:
             }
         }
     
-    RETURN_TYPES = ("SEC_MODEL", "SEC_TOKENIZER")
-    RETURN_NAMES = ("model", "tokenizer")
+    RETURN_TYPES = ("SEC_MODEL",)
+    RETURN_NAMES = ("model",)
     FUNCTION = "load_model"
     CATEGORY = "SeC"
     TITLE = "SeC Model Loader"
@@ -148,7 +148,7 @@ class SeCModelLoader:
 
             print(f"SeC model loaded successfully on {device}")
 
-            return (model, tokenizer)
+            return (model,)
             
         except Exception as e:
             raise RuntimeError(f"Failed to load SeC model: {str(e)}")
@@ -168,9 +168,6 @@ class SeCVideoSegmentation:
             "required": {
                 "model": ("SEC_MODEL", {
                     "tooltip": "SeC model loaded from SeCModelLoader node"
-                }),
-                "tokenizer": ("SEC_TOKENIZER", {
-                    "tooltip": "SeC tokenizer loaded from SeCModelLoader node"
                 }),
                 "frames": ("IMAGE", {
                     "tooltip": "Sequential video frames as IMAGE tensor batch"
@@ -322,7 +319,7 @@ class SeCVideoSegmentation:
 
         return temp_dir, frame_paths
     
-    def segment_video(self, model, tokenizer, frames, positive_points="", negative_points="",
+    def segment_video(self, model, frames, positive_points="", negative_points="",
                      bbox="", input_mask=None, tracking_direction="forward",
                      annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=5,
                      offload_video_to_cpu=False, offload_state_to_cpu=False):
@@ -393,7 +390,7 @@ class SeCVideoSegmentation:
                     max_frame_num_to_track=max_frames_to_track,
                     reverse=False,
                     init_mask=init_mask,
-                    tokenizer=tokenizer,
+                    tokenizer=None,
                     mllm_memory_size=mllm_memory_size,
                 ):
                     video_segments[out_frame_idx] = {
@@ -426,7 +423,7 @@ class SeCVideoSegmentation:
                     max_frame_num_to_track=max_frames_to_track,
                     reverse=True,
                     init_mask=init_mask,
-                    tokenizer=tokenizer,
+                    tokenizer=None,
                     mllm_memory_size=mllm_memory_size,
                 ):
                     if out_frame_idx not in video_segments:
@@ -442,7 +439,7 @@ class SeCVideoSegmentation:
                     max_frame_num_to_track=max_frames_to_track,
                     reverse=reverse,
                     init_mask=init_mask,
-                    tokenizer=tokenizer,
+                    tokenizer=None,
                     mllm_memory_size=mllm_memory_size,
                 ):
                     video_segments[out_frame_idx] = {

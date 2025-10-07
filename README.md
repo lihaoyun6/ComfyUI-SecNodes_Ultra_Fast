@@ -90,7 +90,7 @@ Load and configure the SeC model for inference.
 | *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference |
 | *allow_mask_overlap* | BOOLEAN | True | Allow objects to overlap (disable for strict separation) |
 
-**Outputs:** `model`, `tokenizer`
+**Outputs:** `model`
 
 ---
 
@@ -100,7 +100,6 @@ Segment and track objects across video frames.
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | **model** | MODEL | - | SeC model from loader |
-| **tokenizer** | TOKENIZER | - | SeC tokenizer from loader |
 | **frames** | IMAGE | - | Video frames as IMAGE batch |
 | *positive_points* | STRING | "" | JSON: `'[{"x": 100, "y": 200}]'` |
 | *negative_points* | STRING | "" | JSON: `'[{"x": 50, "y": 50}]'` |
@@ -140,14 +139,13 @@ Visualize coordinate points on images for debugging.
 ### Basic Workflow
 ```
 1. SeC Model Loader (default settings)
-   └─→ model, tokenizer
+   └─→ model
 
 2. Load Video Frames
    └─→ frames
 
 3. SeC Video Segmentation
    ├─ model: from (1)
-   ├─ tokenizer: from (1)
    ├─ frames: from (2)
    └─ positive_points: '[{"x": 200, "y": 300}]'
 
