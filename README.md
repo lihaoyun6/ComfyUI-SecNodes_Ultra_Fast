@@ -49,48 +49,52 @@ cd ComfyUI/custom_nodes/comfyui_sec_nodes
 pip install -r requirements.txt
 ```
 
-### 3. Download SeC Model to ComfyUI Models Folder
-The model should be placed in the standard ComfyUI models location:
+### 3. Restart ComfyUI
+The nodes will appear in the "SeC" category.
 
-**Target Location:**
-```
-ComfyUI/models/sams/SeC-4B/
-```
+### 4. Model Auto-Download
+**The SeC-4B model will automatically download on first use!** No manual download required.
 
-**Download using huggingface-cli (recommended):**
+When you first use the SeC Model Loader node, it will:
+1. Check for existing model in `ComfyUI/models/sams/SeC-4B/`
+2. If not found, automatically download from HuggingFace (~8.5GB)
+3. Save to `ComfyUI/models/sams/SeC-4B/` for future use
+
+**Optional: Pre-download Model (Faster First Run)**
 ```bash
-# Navigate to ComfyUI models/sams folder
+# Navigate to ComfyUI models directory
 cd ComfyUI/models/sams
 
-# Download model
+# Download model using huggingface-cli
 huggingface-cli download OpenIXCLab/SeC-4B --local-dir SeC-4B
-```
 
-**Or using git lfs:**
-```bash
-cd ComfyUI/models/sams
+# Or using git lfs
 git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
 ```
 
-The node will automatically find the model at `models/sams/SeC-4B` (default path).
-
-### 4. Restart ComfyUI
-The nodes will appear in the "SeC" category.
+**Custom Model Locations (Advanced)**
+You can specify custom model paths using ComfyUI's `extra_model_paths.yaml`:
+```yaml
+comfyui:
+  base_path: /your/custom/path/
+  sams: models/sams/
+```
 
 ## Nodes Reference
 
 ### 1. SeC Model Loader
-Load and configure the SeC model for inference.
+Load and configure the SeC model for inference. Automatically downloads SeC-4B model on first use.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| **model_path** | STRING | `models/sams/SeC-4B` | Path to model or HuggingFace ID |
 | **torch_dtype** | CHOICE | `bfloat16` | Precision: bfloat16 (recommended), float16, float32 |
 | **device** | CHOICE | `auto` | Device: auto, cuda, cpu |
 | *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference |
 | *allow_mask_overlap* | BOOLEAN | True | Allow objects to overlap (disable for strict separation) |
 
 **Outputs:** `model`
+
+**Note:** The model is automatically located in `models/sams/SeC-4B/` or downloaded from HuggingFace if not found.
 
 ---
 
@@ -212,7 +216,10 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 
 ## Troubleshooting
 
-**Model not found**: Ensure model is at `ComfyUI/models/sams/SeC-4B/`
+**Model download issues**:
+- Ensure you have ~8.5GB disk space and internet connection
+- Model auto-downloads to `ComfyUI/models/sams/SeC-4B/` on first use
+- Check console for download progress and any error messages
 
 **CUDA out of memory**:
 - Enable `offload_video_to_cpu` (significant VRAM savings, only ~3% slower)

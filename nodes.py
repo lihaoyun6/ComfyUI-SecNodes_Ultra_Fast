@@ -10,6 +10,67 @@ from .inference.modeling_sec import SeCModel
 from transformers import AutoTokenizer
 
 
+def find_sec_model():
+    """
+    Find SeC-4B model in registered 'sams' folder paths.
+    Returns the path to the model directory if found, None otherwise.
+    """
+    try:
+        sams_paths = folder_paths.get_folder_paths("sams")
+    except KeyError:
+        # 'sams' folder type not registered yet
+        return None
+
+    for sams_dir in sams_paths:
+        model_path = os.path.join(sams_dir, "SeC-4B")
+        if os.path.exists(model_path) and os.path.isdir(model_path):
+            # Verify required files exist
+            config_exists = os.path.exists(os.path.join(model_path, "config.json"))
+            model_exists = (
+                os.path.exists(os.path.join(model_path, "model.safetensors")) or
+                os.path.exists(os.path.join(model_path, "pytorch_model.bin"))
+            )
+            tokenizer_exists = os.path.exists(os.path.join(model_path, "tokenizer_config.json"))
+
+            if config_exists and model_exists and tokenizer_exists:
+                return model_path
+
+    return None
+
+
+def download_sec_model():
+    """
+    Download SeC-4B model from HuggingFace to the first registered 'sams' folder.
+    Returns the path to the downloaded model directory.
+    """
+    from huggingface_hub import snapshot_download
+
+    sams_paths = folder_paths.get_folder_paths("sams")
+    destination = os.path.join(sams_paths[0], "SeC-4B")
+
+    print("=" * 80)
+    print("SeC-4B model not found. Downloading from HuggingFace...")
+    print(f"Repository: OpenIXCLab/SeC-4B")
+    print(f"Destination: {destination}")
+    print("=" * 80)
+
+    # Create directory if it doesn't exist
+    os.makedirs(destination, exist_ok=True)
+
+    snapshot_download(
+        repo_id="OpenIXCLab/SeC-4B",
+        local_dir=destination,
+        local_dir_use_symlinks=False
+    )
+
+    print("=" * 80)
+    print(f"✓ SeC-4B model downloaded successfully!")
+    print(f"✓ Location: {destination}")
+    print("=" * 80)
+
+    return destination
+
+
 class SeCModelLoader:
     """
     ComfyUI node for loading SeC (Segment Concept) models
@@ -19,10 +80,6 @@ class SeCModelLoader:
     def INPUT_TYPES(cls):
         return {
             "required": {
-                "model_path": ("STRING", {
-                    "default": "models/sams/SeC-4B",
-                    "tooltip": "Path to SeC model (relative to ComfyUI root) or HuggingFace model ID."
-                }),
                 "torch_dtype": (["bfloat16", "float16", "float32"], {
                     "default": "bfloat16",
                     "tooltip": "Data precision for model inference. bfloat16 recommended for best speed/quality balance."
@@ -50,8 +107,22 @@ class SeCModelLoader:
     CATEGORY = "SeC"
     TITLE = "SeC Model Loader"
     
-    def load_model(self, model_path, torch_dtype, device, use_flash_attn=True, allow_mask_overlap=True):
+    def load_model(self, torch_dtype, device, use_flash_attn=True, allow_mask_overlap=True):
         """Load SeC model and tokenizer"""
+
+        # Find or download the SeC-4B model
+        model_path = find_sec_model()
+
+        if model_path is None:
+            # Model not found, download it
+            try:
+                model_path = download_sec_model()
+            except Exception as e:
+                raise RuntimeError(f"Failed to download SeC-4B model: {str(e)}")
+        else:
+            print("=" * 80)
+            print(f"✓ Found SeC-4B model at: {model_path}")
+            print("=" * 80)
 
         if device == "auto":
             device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -66,7 +137,7 @@ class SeCModelLoader:
         hydra_overrides_extra = []
         overlap_value = "false" if allow_mask_overlap else "true"
         hydra_overrides_extra.append(f"++model.non_overlap_masks={overlap_value}")
-        
+
         try:
             config = SeCConfig.from_pretrained(model_path)
             config.hydra_overrides_extra = hydra_overrides_extra
