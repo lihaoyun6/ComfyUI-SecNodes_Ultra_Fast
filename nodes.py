@@ -216,11 +216,7 @@ class SeCVideoSegmentation:
                 }),
                 "offload_video_to_cpu": ("BOOLEAN", {
                     "default": False,
-                    "tooltip": "Memory: Offload video frames to CPU (saves GPU memory, minimal speed impact)"
-                }),
-                "offload_state_to_cpu": ("BOOLEAN", {
-                    "default": False,
-                    "tooltip": "Memory: Offload inference state to CPU (saves GPU memory, ~10% slower)"
+                    "tooltip": "Memory: Offload video frames to CPU (saves significant GPU memory, ~3% slower)"
                 })
             }
         }
@@ -322,12 +318,15 @@ class SeCVideoSegmentation:
     def segment_video(self, model, frames, positive_points="", negative_points="",
                      bbox="", input_mask=None, tracking_direction="forward",
                      annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=5,
-                     offload_video_to_cpu=False, offload_state_to_cpu=False):
+                     offload_video_to_cpu=False):
         """Perform video object segmentation"""
 
         try:
             pil_images = self.tensor_to_pil_images(frames)
             video_dir, frame_paths = self.save_frames_temporarily(pil_images)
+
+            # Automatically set offload_state_to_cpu based on model device
+            offload_state_to_cpu = str(model.device) == "cpu"
 
             inference_state = model.grounding_encoder.init_state(
                 video_path=video_dir,

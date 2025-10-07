@@ -110,8 +110,7 @@ Segment and track objects across video frames.
 | *object_id* | INT | 1 | Unique ID for multi-object tracking |
 | *max_frames_to_track* | INT | -1 | Max frames (-1 = all) |
 | *mllm_memory_size* | INT | 5 | Semantic memory size (lower = less memory) |
-| *offload_video_to_cpu* | BOOLEAN | False | Offload video frames to CPU (saves GPU memory) |
-| *offload_state_to_cpu* | BOOLEAN | False | Offload inference state to CPU (saves more GPU, ~10% slower) |
+| *offload_video_to_cpu* | BOOLEAN | False | Offload video frames to CPU (saves significant GPU memory, ~3% slower) |
 
 **Outputs:** `masks` (MASK), `object_ids` (INT)
 
@@ -201,7 +200,7 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 - **PyTorch**: Included with ComfyUI
 - **CUDA GPU**: Recommended (CPU supported but slow)
 - **VRAM**: ~12-16GB for SeC-4B model with bfloat16
-  - Can reduce to ~8-10GB by enabling `offload_video_to_cpu` and `offload_state_to_cpu`
+  - Can reduce significantly by enabling `offload_video_to_cpu` (~3% speed penalty)
   - Lower `mllm_memory_size` (default: 5) for additional memory savings
 
 ## Links & Resources
@@ -216,14 +215,14 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 **Model not found**: Ensure model is at `ComfyUI/models/sams/SeC-4B/`
 
 **CUDA out of memory**:
-- Enable `offload_video_to_cpu` and `offload_state_to_cpu` (minimal speed impact)
+- Enable `offload_video_to_cpu` (significant VRAM savings, only ~3% slower)
 - Reduce `mllm_memory_size` from 5 to 3
 - Try `float16` precision instead of `bfloat16`
 - Process fewer frames at once
 
 **Slow inference**:
 - Enable `use_flash_attn` in model loader (requires Flash Attention 2)
-- Disable offload options if you have sufficient VRAM
+- Disable `offload_video_to_cpu` if you have sufficient VRAM
 - Use `bfloat16` precision (default)
 
 **Empty masks**: Provide clearer visual prompts or try different frame
