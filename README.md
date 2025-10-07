@@ -118,7 +118,13 @@ Segment and track objects across video frames.
 
 **Outputs:** `masks` (MASK), `object_ids` (INT)
 
-**Note:** Provide at least one visual prompt (points, bbox, or mask).
+**Important Notes:**
+- Provide at least one visual prompt (points, bbox, or mask)
+- **Output always matches input frame count**: If you input 100 frames, you get 100 masks
+- Frames before/after the tracked range will have empty (blank) masks
+  - Example: 100 frames, annotation_frame_idx=50, direction=forward → frames 0-49 are blank, 50-99 are tracked
+  - Example: 100 frames, annotation_frame_idx=50, direction=backward → frames 0-50 are tracked, 51-99 are blank
+  - Example: 100 frames, annotation_frame_idx=50, direction=bidirectional → all frames 0-99 are tracked
 
 ---
 

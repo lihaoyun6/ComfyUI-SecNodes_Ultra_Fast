@@ -517,19 +517,24 @@ class SeCVideoSegmentation:
                         for i, out_obj_id in enumerate(out_obj_ids)
                     }
             
+            # Create output masks for all input frames
+            # Frames not in video_segments get empty masks
+            num_frames = len(pil_images)
             output_masks = []
             output_obj_ids = []
 
-            for frame_idx in sorted(video_segments.keys()):
-                for obj_id, mask in video_segments[frame_idx].items():
-                    mask_tensor = self.mask_to_tensor(mask)
-                    output_masks.append(mask_tensor)
-                    output_obj_ids.append(obj_id)
-
-            if not output_masks:
-                empty_mask = torch.zeros(frames.shape[1], frames.shape[2])
-                output_masks = [empty_mask]
-                output_obj_ids = [0]
+            for frame_idx in range(num_frames):
+                if frame_idx in video_segments:
+                    # Frame was tracked - use real mask
+                    for obj_id, mask in video_segments[frame_idx].items():
+                        mask_tensor = self.mask_to_tensor(mask)
+                        output_masks.append(mask_tensor)
+                        output_obj_ids.append(obj_id)
+                else:
+                    # Frame not tracked - use empty mask
+                    empty_mask = torch.zeros(frames.shape[1], frames.shape[2])
+                    output_masks.append(empty_mask)
+                    output_obj_ids.append(0)
 
             masks_tensor = torch.stack(output_masks)
             obj_ids_tensor = torch.tensor(output_obj_ids, dtype=torch.int32)
