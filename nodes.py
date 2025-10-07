@@ -80,15 +80,26 @@ class SeCModelLoader:
     
     @classmethod
     def INPUT_TYPES(cls):
+        # Dynamically build device list based on available GPUs
+        device_choices = ["auto", "cpu"]
+
+        if torch.cuda.is_available():
+            gpu_count = torch.cuda.device_count()
+            for i in range(gpu_count):
+                device_choices.append(f"gpu{i}")
+
+            if gpu_count > 1:
+                device_choices.append("multi-gpu")
+
         return {
             "required": {
                 "torch_dtype": (["bfloat16", "float16", "float32"], {
                     "default": "bfloat16",
                     "tooltip": "Data precision for model inference. bfloat16 recommended for best speed/quality balance."
                 }),
-                "device": (["auto", "cpu", "cuda:0", "cuda:1", "cuda:2", "cuda:3", "multi-gpu"], {
+                "device": (device_choices, {
                     "default": "auto",
-                    "tooltip": "Device: auto (cuda:0 if available, else CPU), cpu, cuda:0-3 (specific GPU), multi-gpu (split across all GPUs)"
+                    "tooltip": "Device: auto (gpu0 if available, else CPU), cpu, gpu0-N (specific GPU), multi-gpu (split across all GPUs)"
                 })
             },
             "optional": {
@@ -130,6 +141,10 @@ class SeCModelLoader:
         original_device = device
         if device == "auto":
             device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        elif device.startswith("gpu"):
+            # Map gpu0 -> cuda:0, gpu1 -> cuda:1, etc.
+            gpu_num = device[3:]  # Extract number after "gpu"
+            device = f"cuda:{gpu_num}"
         elif device == "multi-gpu":
             device = "cuda"  # Will use device_map='auto' to split
 
@@ -185,7 +200,7 @@ class SeCModelLoader:
             tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
             model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
 
-            if device == "cuda" and torch_dtype != torch.float32:
+            if device.startswith("cuda") and torch_dtype != torch.float32:
                 print(f"Installing dtype conversion hooks...")
 
                 def dtype_conversion_hook(module, args, kwargs):

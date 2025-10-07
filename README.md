@@ -88,13 +88,20 @@ Load and configure the SeC model for inference. Automatically downloads SeC-4B m
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | **torch_dtype** | CHOICE | `bfloat16` | Precision: bfloat16 (recommended), float16, float32 |
-| **device** | CHOICE | `auto` | Device selection:<br>• `auto`: cuda:0 if available, else CPU (recommended)<br>• `cpu`: Force CPU<br>• `cuda:0-3`: Specific GPU<br>• `multi-gpu`: Split model across all GPUs |
+| **device** | CHOICE | `auto` | Device selection (dynamically detects available GPUs):<br>• `auto`: gpu0 if available, else CPU (recommended)<br>• `cpu`: Force CPU<br>• `gpu0`, `gpu1`, etc.: Specific GPU<br>• `multi-gpu`: Split model across all GPUs (only shown if 2+ GPUs) |
 | *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference |
 | *allow_mask_overlap* | BOOLEAN | True | Allow objects to overlap (disable for strict separation) |
 
 **Outputs:** `model`
 
-**Note:** The model is automatically located in `models/sams/SeC-4B/` or downloaded from HuggingFace if not found.
+**Notes:**
+- The model is automatically located in `models/sams/SeC-4B/` or downloaded from HuggingFace if not found.
+- **Device options dynamically adapt** to your system:
+  - 1 GPU system: Shows `auto`, `cpu`, `gpu0`
+  - 2 GPU system: Shows `auto`, `cpu`, `gpu0`, `gpu1`, `multi-gpu`
+  - 3+ GPU system: Shows all available GPUs plus `multi-gpu` option
+  - No GPU: Shows only `auto` and `cpu`
+- Dtype conversion hooks are automatically installed for all GPU modes to ensure proper precision handling
 
 ---
 
