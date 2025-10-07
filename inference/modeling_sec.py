@@ -318,6 +318,8 @@ class SeCModel(PreTrainedModel):
         vit_embeds = vit_embeds.to(input_embeds.dtype)
         fast_vit_embeds = None
 
+        # Ensure image_flags is on same device as vit_embeds for multi-GPU compatibility
+        image_flags = image_flags.to(vit_embeds.device)
         vit_embeds = vit_embeds[image_flags == 1]
         vit_batch_size = pixel_values.shape[0]
 

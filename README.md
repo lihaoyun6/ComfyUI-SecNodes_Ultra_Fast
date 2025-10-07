@@ -88,7 +88,7 @@ Load and configure the SeC model for inference. Automatically downloads SeC-4B m
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | **torch_dtype** | CHOICE | `bfloat16` | Precision: bfloat16 (recommended), float16, float32 |
-| **device** | CHOICE | `auto` | Device: auto, cuda, cpu |
+| **device** | CHOICE | `auto` | Device selection:<br>• `auto`: cuda:0 if available, else CPU (recommended)<br>• `cpu`: Force CPU<br>• `cuda:0-3`: Specific GPU<br>• `multi-gpu`: Split model across all GPUs |
 | *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference |
 | *allow_mask_overlap* | BOOLEAN | True | Allow objects to overlap (disable for strict separation) |
 

@@ -86,9 +86,9 @@ class SeCModelLoader:
                     "default": "bfloat16",
                     "tooltip": "Data precision for model inference. bfloat16 recommended for best speed/quality balance."
                 }),
-                "device": (["auto", "cuda", "cpu"], {
+                "device": (["auto", "cpu", "cuda:0", "cuda:1", "cuda:2", "cuda:3", "multi-gpu"], {
                     "default": "auto",
-                    "tooltip": "Target device for model inference. 'auto' selects CUDA if available, otherwise CPU."
+                    "tooltip": "Device: auto (cuda:0 if available, else CPU), cpu, cuda:0-3 (specific GPU), multi-gpu (split across all GPUs)"
                 })
             },
             "optional": {
@@ -126,8 +126,12 @@ class SeCModelLoader:
             print(f"✓ Found SeC-4B model at: {model_path}")
             print("=" * 80)
 
+        # Handle device selection
+        original_device = device
         if device == "auto":
-            device = "cuda" if torch.cuda.is_available() else "cpu"
+            device = "cuda:0" if torch.cuda.is_available() else "cpu"
+        elif device == "multi-gpu":
+            device = "cuda"  # Will use device_map='auto' to split
 
         dtype_map = {
             "bfloat16": torch.bfloat16,
@@ -150,22 +154,32 @@ class SeCModelLoader:
                 "use_flash_attn": use_flash_attn,
             }
 
-            if device == "cuda":
+            # Configure device_map based on device selection
+            if original_device == "multi-gpu":
                 import gc
                 gc.collect()
                 torch.cuda.empty_cache()
-                load_kwargs["device_map"] = "auto"
+                load_kwargs["device_map"] = "auto"  # Split across all GPUs
                 load_kwargs["low_cpu_mem_usage"] = True
-                print(f"Loading SeC model with device_map='auto'...")
+                print(f"Loading SeC model with device_map='auto' (multi-GPU)...")
+            elif device.startswith("cuda:"):
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
+                load_kwargs["device_map"] = {"": device}  # Force to specific GPU
+                load_kwargs["low_cpu_mem_usage"] = True
+                print(f"Loading SeC model on {device}...")
             else:
+                # CPU mode
                 load_kwargs["low_cpu_mem_usage"] = True
+                print(f"Loading SeC model on CPU...")
 
             model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
 
-            if device == "cuda" and torch_dtype != torch.float32:
+            if device.startswith("cuda") and torch_dtype != torch.float32 and original_device != "multi-gpu":
                 print(f"Converting model to {torch_dtype}...")
                 model = model.to(dtype=torch_dtype)
-            elif device != "cuda":
+            elif device == "cpu":
                 model = model.to(device)
 
             tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
