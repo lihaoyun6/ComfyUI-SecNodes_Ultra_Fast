@@ -28,7 +28,9 @@ def find_sec_model():
             config_exists = os.path.exists(os.path.join(model_path, "config.json"))
             model_exists = (
                 os.path.exists(os.path.join(model_path, "model.safetensors")) or
-                os.path.exists(os.path.join(model_path, "pytorch_model.bin"))
+                os.path.exists(os.path.join(model_path, "model.safetensors.index.json")) or  # Sharded safetensors
+                os.path.exists(os.path.join(model_path, "pytorch_model.bin")) or
+                os.path.exists(os.path.join(model_path, "pytorch_model.bin.index.json"))  # Sharded bin
             )
             tokenizer_exists = os.path.exists(os.path.join(model_path, "tokenizer_config.json"))
 
