@@ -126,6 +126,24 @@ Segment and track objects across video frames.
   - Example: 100 frames, annotation_frame_idx=50, direction=backward → frames 0-50 are tracked, 51-99 are blank
   - Example: 100 frames, annotation_frame_idx=50, direction=bidirectional → all frames 0-99 are tracked
 
+**Input Combination Behavior:**
+
+You can combine different input types for powerful segmentation control:
+
+| Input Combination | Behavior |
+|-------------------|----------|
+| **Points only** | Standard point-based segmentation |
+| **Bbox only** | Segment object within bounding box |
+| **Mask only** | Track the masked region |
+| **Mask + Positive points** | Only positive points **inside the mask** are used to refine which part of the masked region to segment |
+| **Mask + Negative points** | All negative points are used to exclude regions from the mask |
+| **Mask + Positive + Negative** | Positive points inside mask refine the region, negative points exclude areas |
+
+**Example Use Cases:**
+- **Rough mask + precise points**: Draw a rough mask around a person, then add positive points on their face to focus the segmentation
+- **Mask + negative exclusions**: Mask an object, add negative points on unwanted parts (e.g., exclude a hand from a person mask)
+- **Point filtering**: Positive points outside the mask boundary are automatically ignored, preventing accidental selections
+
 ---
 
 ### 3. Coordinate Plotter

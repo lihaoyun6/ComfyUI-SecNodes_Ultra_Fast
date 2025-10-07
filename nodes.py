@@ -410,6 +410,50 @@ class SeCVideoSegmentation:
             neg_points, neg_labels = self.parse_points(negative_points)
             bbox_coords = self.parse_bbox(bbox)
 
+            init_mask = None
+
+            # Step 1: Add mask if provided (establishes initial region)
+            if input_mask is not None:
+                # Handle both [H, W] and [B, H, W] mask formats
+                if input_mask.dim() == 2:
+                    mask_array = input_mask.cpu().numpy()
+                elif input_mask.dim() == 3:
+                    mask_array = input_mask[0].cpu().numpy()
+                else:
+                    raise ValueError(f"Unexpected mask dimensions: {input_mask.dim()}. Expected 2D [H,W] or 3D [B,H,W]")
+
+                init_mask = (mask_array > 0.5).astype(np.bool_)
+
+                _, out_obj_ids, out_mask_logits = model.grounding_encoder.add_new_mask(
+                    inference_state=inference_state,
+                    frame_idx=annotation_frame_idx,
+                    obj_id=object_id,
+                    mask=init_mask,
+                )
+
+            # Step 2: Filter positive points if mask was provided
+            # Only keep positive points that fall inside the mask boundary
+            if init_mask is not None and pos_points is not None:
+                filtered_pos_points = []
+                filtered_pos_labels = []
+                for i, point in enumerate(pos_points):
+                    x, y = int(point[0]), int(point[1])
+                    # Check if point is within mask bounds and inside the mask
+                    if 0 <= y < init_mask.shape[0] and 0 <= x < init_mask.shape[1]:
+                        if init_mask[y, x]:  # Point is inside mask
+                            filtered_pos_points.append(point)
+                            filtered_pos_labels.append(pos_labels[i])
+
+                # Replace pos_points with filtered version
+                if filtered_pos_points:
+                    pos_points = np.array(filtered_pos_points)
+                    pos_labels = np.array(filtered_pos_labels, dtype=np.int32)
+                else:
+                    # No positive points inside mask - clear them
+                    pos_points = None
+                    pos_labels = None
+
+            # Step 3: Combine points for refinement
             points = None
             labels = None
             if pos_points is not None and neg_points is not None:
@@ -422,7 +466,7 @@ class SeCVideoSegmentation:
                 points = neg_points
                 labels = np.zeros(len(neg_points), dtype=np.int32)
 
-            init_mask = None
+            # Step 4: Add points/bbox to refine the segmentation
             if points is not None or bbox_coords is not None:
                 _, out_obj_ids, out_mask_logits = model.grounding_encoder.add_new_points_or_box(
                     inference_state=inference_state,
@@ -434,18 +478,8 @@ class SeCVideoSegmentation:
                 )
                 init_mask = (out_mask_logits[0] > 0.0).cpu().numpy()
 
-            elif input_mask is not None:
-                mask_array = input_mask[0].cpu().numpy()
-                init_mask = (mask_array > 0.5).astype(np.bool_)
-
-                _, out_obj_ids, out_mask_logits = model.grounding_encoder.add_new_mask(
-                    inference_state=inference_state,
-                    frame_idx=annotation_frame_idx,
-                    obj_id=object_id,
-                    mask=init_mask,
-                )
-
-            else:
+            # Ensure at least one input was provided
+            if init_mask is None:
                 raise ValueError("At least one visual prompt (points, bbox, or mask) must be provided")
 
             if max_frames_to_track == -1:
