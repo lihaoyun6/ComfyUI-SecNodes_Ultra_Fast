@@ -134,21 +134,41 @@ class SeCModelLoader:
         current_config = (torch_dtype, device, use_flash_attn, allow_mask_overlap)
 
         # Check if we can use cached model
-        if cache_model and SeCModelLoader._cached_model is not None and SeCModelLoader._cache_config == current_config:
-            print("=" * 80)
-            print("✓ Using cached SeC model")
-            print("=" * 80)
-            return (SeCModelLoader._cached_model,)
+        if SeCModelLoader._cached_model is not None:
+            # If cache_model=True and config matches, reuse the model
+            if cache_model and SeCModelLoader._cache_config == current_config:
+                print("=" * 80)
+                print("✓ Using cached SeC model (persistent cache)")
+                print("=" * 80)
+                return (SeCModelLoader._cached_model,)
 
-        # Clear cache if cache_model is False
-        if not cache_model and SeCModelLoader._cached_model is not None:
-            print("Clearing model cache...")
-            SeCModelLoader._cached_model = None
-            SeCModelLoader._cache_config = None
-            import gc
-            gc.collect()
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            # If cache_model=False but model exists, this is a new workflow run
+            # Clear the old model and load fresh
+            if not cache_model:
+                print("Unloading previous model (cache_model=False)...")
+                old_model = SeCModelLoader._cached_model
+                SeCModelLoader._cached_model = None
+                SeCModelLoader._cache_config = None
+
+                # Fully delete the old model
+                try:
+                    if hasattr(old_model, 'grounding_encoder'):
+                        del old_model.grounding_encoder
+                    if hasattr(old_model, 'vision_model'):
+                        del old_model.vision_model
+                    if hasattr(old_model, 'language_model'):
+                        del old_model.language_model
+                    if hasattr(old_model, 'tokenizer'):
+                        del old_model.tokenizer
+                    del old_model
+                except Exception as e:
+                    print(f"Warning: Failed to delete old model: {e}")
+
+                import gc
+                gc.collect()
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+                print("✓ Previous model unloaded")
 
         # Find or download the SeC-4B model
         model_path = find_sec_model()
@@ -277,11 +297,15 @@ class SeCModelLoader:
 
             print(f"SeC model loaded successfully on {device}")
 
-            # Cache model if caching is enabled
+            # Always cache model temporarily to allow node sharing within workflow
+            # If cache_model=False, it will be cleared on next load
+            SeCModelLoader._cached_model = model
+            SeCModelLoader._cache_config = current_config if cache_model else None
+
             if cache_model:
-                SeCModelLoader._cached_model = model
-                SeCModelLoader._cache_config = current_config
-                print("✓ Model cached for reuse")
+                print("✓ Model cached for persistent reuse")
+            else:
+                print("✓ Model cached temporarily for this workflow")
 
             return (model,)
 
@@ -646,34 +670,11 @@ class SeCVideoSegmentation:
                 torch.cuda.empty_cache()
             gc.collect()
 
-            # Unload model if not cached
-            # If model is cached, SeCModelLoader will provide same instance to next node
-            # If not cached, each node gets fresh model that can be safely deleted
-            if model is not SeCModelLoader._cached_model:
-                try:
-                    # Delete all model components to free memory completely
-                    if hasattr(model, 'grounding_encoder'):
-                        del model.grounding_encoder
-                    if hasattr(model, 'vision_model'):
-                        del model.vision_model
-                    if hasattr(model, 'language_model'):
-                        del model.language_model
-                    if hasattr(model, 'tokenizer'):
-                        del model.tokenizer
-
-                    # Delete the model itself
-                    del model
-
-                    # Force garbage collection
-                    gc.collect()
-                    if torch.cuda.is_available():
-                        torch.cuda.empty_cache()
-
-                    print("✓ Model unloaded from memory (not cached)")
-                except Exception as e:
-                    print(f"Warning: Model unload failed: {e}")
-            else:
-                print("✓ Model retained in cache for reuse")
+            # Note: We don't manually delete the model here because:
+            # 1. If cached, it needs to stay for reuse
+            # 2. If not cached, multiple nodes may still reference the same instance
+            # 3. Python's garbage collection will clean up when all references are gone
+            # The cache_model parameter in the loader controls memory behavior
 
             return (masks_tensor, obj_ids_tensor)
 
