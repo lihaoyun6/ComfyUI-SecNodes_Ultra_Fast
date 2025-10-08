@@ -122,6 +122,7 @@ Segment and track objects across video frames.
 | *max_frames_to_track* | INT | -1 | Max frames (-1 = all) |
 | *mllm_memory_size* | INT | 5 | Semantic memory size (lower = less memory) |
 | *offload_video_to_cpu* | BOOLEAN | False | Offload video frames to CPU (saves significant GPU memory, ~3% slower) |
+| *unload_model_after_run* | BOOLEAN | True | Unload model from memory after segmentation (frees VRAM/RAM, disable for sequential runs) |
 
 **Outputs:** `masks` (MASK), `object_ids` (INT)
 

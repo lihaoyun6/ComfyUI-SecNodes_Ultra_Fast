@@ -319,6 +319,10 @@ class SeCVideoSegmentation:
                 "offload_video_to_cpu": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "Memory: Offload video frames to CPU (saves significant GPU memory, ~3% slower)"
+                }),
+                "unload_model_after_run": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Memory: Unload model from memory after segmentation completes (frees VRAM/RAM, requires reload for next run)"
                 })
             }
         }
@@ -420,7 +424,7 @@ class SeCVideoSegmentation:
     def segment_video(self, model, frames, positive_points="", negative_points="",
                      bbox="", input_mask=None, tracking_direction="forward",
                      annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=5,
-                     offload_video_to_cpu=False):
+                     offload_video_to_cpu=False, unload_model_after_run=True):
         """Perform video object segmentation"""
 
         try:
@@ -612,6 +616,31 @@ class SeCVideoSegmentation:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             gc.collect()
+
+            # Unload model completely if requested
+            if unload_model_after_run:
+                try:
+                    # Clear all model components
+                    if hasattr(model, 'grounding_encoder'):
+                        del model.grounding_encoder
+                    if hasattr(model, 'vision_model'):
+                        del model.vision_model
+                    if hasattr(model, 'language_model'):
+                        del model.language_model
+                    if hasattr(model, 'tokenizer'):
+                        del model.tokenizer
+
+                    # Delete the model itself
+                    del model
+
+                    # Force garbage collection
+                    gc.collect()
+                    if torch.cuda.is_available():
+                        torch.cuda.empty_cache()
+
+                    print("✓ Model unloaded from memory")
+                except Exception as e:
+                    print(f"Warning: Model unload failed: {e}")
 
             return (masks_tensor, obj_ids_tensor)
 
