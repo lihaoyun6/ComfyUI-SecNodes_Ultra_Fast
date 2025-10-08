@@ -78,9 +78,6 @@ class SeCModelLoader:
     ComfyUI node for loading SeC (Segment Concept) models
     """
 
-    _cached_model = None
-    _cache_config = None
-
     @classmethod
     def INPUT_TYPES(cls):
         # Dynamically build device list based on available GPUs
@@ -113,10 +110,6 @@ class SeCModelLoader:
                 "allow_mask_overlap": ("BOOLEAN", {
                     "default": True,
                     "tooltip": "Allow tracked objects to overlap. Disable for strictly separate objects."
-                }),
-                "cache_model": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Memory: Cache model in memory for reuse across multiple nodes. Disable to load fresh each time (slower but frees memory between uses)."
                 })
             }
         }
@@ -127,48 +120,8 @@ class SeCModelLoader:
     CATEGORY = "SeC"
     TITLE = "SeC Model Loader"
     
-    def load_model(self, torch_dtype, device, use_flash_attn=True, allow_mask_overlap=True, cache_model=True):
-        """Load SeC model and tokenizer"""
-
-        # Create config tuple for cache comparison
-        current_config = (torch_dtype, device, use_flash_attn, allow_mask_overlap)
-
-        # Check if we can use cached model
-        if SeCModelLoader._cached_model is not None:
-            # If cache_model=True and config matches, reuse the model
-            if cache_model and SeCModelLoader._cache_config == current_config:
-                print("=" * 80)
-                print("✓ Using cached SeC model (persistent cache)")
-                print("=" * 80)
-                return (SeCModelLoader._cached_model,)
-
-            # If cache_model=False but model exists, this is a new workflow run
-            # Clear the old model and load fresh
-            if not cache_model:
-                print("Unloading previous model (cache_model=False)...")
-                old_model = SeCModelLoader._cached_model
-                SeCModelLoader._cached_model = None
-                SeCModelLoader._cache_config = None
-
-                # Fully delete the old model
-                try:
-                    if hasattr(old_model, 'grounding_encoder'):
-                        del old_model.grounding_encoder
-                    if hasattr(old_model, 'vision_model'):
-                        del old_model.vision_model
-                    if hasattr(old_model, 'language_model'):
-                        del old_model.language_model
-                    if hasattr(old_model, 'tokenizer'):
-                        del old_model.tokenizer
-                    del old_model
-                except Exception as e:
-                    print(f"Warning: Failed to delete old model: {e}")
-
-                import gc
-                gc.collect()
-                if torch.cuda.is_available():
-                    torch.cuda.empty_cache()
-                print("✓ Previous model unloaded")
+    def load_model(self, torch_dtype, device, use_flash_attn=True, allow_mask_overlap=True):
+        """Load SeC model"""
 
         # Find or download the SeC-4B model
         model_path = find_sec_model()
@@ -296,16 +249,6 @@ class SeCModelLoader:
                         module.register_forward_pre_hook(dtype_conversion_hook, with_kwargs=True)
 
             print(f"SeC model loaded successfully on {device}")
-
-            # Always cache model temporarily to allow node sharing within workflow
-            # If cache_model=False, it will be cleared on next load
-            SeCModelLoader._cached_model = model
-            SeCModelLoader._cache_config = current_config if cache_model else None
-
-            if cache_model:
-                print("✓ Model cached for persistent reuse")
-            else:
-                print("✓ Model cached temporarily for this workflow")
 
             return (model,)
 
@@ -669,12 +612,6 @@ class SeCVideoSegmentation:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
             gc.collect()
-
-            # Note: We don't manually delete the model here because:
-            # 1. If cached, it needs to stay for reuse
-            # 2. If not cached, multiple nodes may still reference the same instance
-            # 3. Python's garbage collection will clean up when all references are gone
-            # The cache_model parameter in the loader controls memory behavior
 
             return (masks_tensor, obj_ids_tensor)
 
