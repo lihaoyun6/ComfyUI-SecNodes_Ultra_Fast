@@ -91,6 +91,7 @@ Load and configure the SeC model for inference. Automatically downloads SeC-4B m
 | **device** | CHOICE | `auto` | Device selection (dynamically detects available GPUs):<br>• `auto`: gpu0 if available, else CPU (recommended)<br>• `cpu`: Force CPU<br>• `gpu0`, `gpu1`, etc.: Specific GPU<br>• `multi-gpu`: Split model across all GPUs (only shown if 2+ GPUs) |
 | *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference |
 | *allow_mask_overlap* | BOOLEAN | True | Allow objects to overlap (disable for strict separation) |
+| *cache_model* | BOOLEAN | True | Cache model in memory for reuse across nodes (faster). Disable to load fresh each time (frees memory between runs) |
 
 **Outputs:** `model`
 
@@ -102,6 +103,9 @@ Load and configure the SeC model for inference. Automatically downloads SeC-4B m
   - 3+ GPU system: Shows all available GPUs plus `multi-gpu` option
   - No GPU: Shows only `auto` and `cpu`
 - Dtype conversion hooks are automatically installed for all GPU modes to ensure proper precision handling
+- **Model caching behavior**:
+  - `cache_model=True` (default): Model loads once and stays in memory. Multiple segmentation nodes share the same model instance (fast, uses more memory)
+  - `cache_model=False`: Model loads fresh for each workflow execution and is automatically unloaded after all segmentations complete (slower, frees memory)
 
 ---
 
@@ -122,9 +126,10 @@ Segment and track objects across video frames.
 | *max_frames_to_track* | INT | -1 | Max frames (-1 = all) |
 | *mllm_memory_size* | INT | 5 | Semantic memory size (lower = less memory) |
 | *offload_video_to_cpu* | BOOLEAN | False | Offload video frames to CPU (saves significant GPU memory, ~3% slower) |
-| *unload_model_after_run* | BOOLEAN | True | Unload model from memory after segmentation (frees VRAM/RAM, disable for sequential runs) |
 
 **Outputs:** `masks` (MASK), `object_ids` (INT)
+
+**Note:** Model memory management is controlled by the `cache_model` parameter in **SeC Model Loader**, not in this node.
 
 **Important Notes:**
 - Provide at least one visual prompt (points, bbox, or mask)

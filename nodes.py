@@ -77,7 +77,10 @@ class SeCModelLoader:
     """
     ComfyUI node for loading SeC (Segment Concept) models
     """
-    
+
+    _cached_model = None
+    _cache_config = None
+
     @classmethod
     def INPUT_TYPES(cls):
         # Dynamically build device list based on available GPUs
@@ -110,6 +113,10 @@ class SeCModelLoader:
                 "allow_mask_overlap": ("BOOLEAN", {
                     "default": True,
                     "tooltip": "Allow tracked objects to overlap. Disable for strictly separate objects."
+                }),
+                "cache_model": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Memory: Cache model in memory for reuse across multiple nodes. Disable to load fresh each time (slower but frees memory between uses)."
                 })
             }
         }
@@ -120,8 +127,28 @@ class SeCModelLoader:
     CATEGORY = "SeC"
     TITLE = "SeC Model Loader"
     
-    def load_model(self, torch_dtype, device, use_flash_attn=True, allow_mask_overlap=True):
+    def load_model(self, torch_dtype, device, use_flash_attn=True, allow_mask_overlap=True, cache_model=True):
         """Load SeC model and tokenizer"""
+
+        # Create config tuple for cache comparison
+        current_config = (torch_dtype, device, use_flash_attn, allow_mask_overlap)
+
+        # Check if we can use cached model
+        if cache_model and SeCModelLoader._cached_model is not None and SeCModelLoader._cache_config == current_config:
+            print("=" * 80)
+            print("✓ Using cached SeC model")
+            print("=" * 80)
+            return (SeCModelLoader._cached_model,)
+
+        # Clear cache if cache_model is False
+        if not cache_model and SeCModelLoader._cached_model is not None:
+            print("Clearing model cache...")
+            SeCModelLoader._cached_model = None
+            SeCModelLoader._cache_config = None
+            import gc
+            gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         # Find or download the SeC-4B model
         model_path = find_sec_model()
@@ -250,8 +277,14 @@ class SeCModelLoader:
 
             print(f"SeC model loaded successfully on {device}")
 
+            # Cache model if caching is enabled
+            if cache_model:
+                SeCModelLoader._cached_model = model
+                SeCModelLoader._cache_config = current_config
+                print("✓ Model cached for reuse")
+
             return (model,)
-            
+
         except Exception as e:
             raise RuntimeError(f"Failed to load SeC model: {str(e)}")
 
@@ -319,10 +352,6 @@ class SeCVideoSegmentation:
                 "offload_video_to_cpu": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "Memory: Offload video frames to CPU (saves significant GPU memory, ~3% slower)"
-                }),
-                "unload_model_after_run": ("BOOLEAN", {
-                    "default": True,
-                    "tooltip": "Memory: Unload model from memory after segmentation completes (frees VRAM/RAM, requires reload for next run)"
                 })
             }
         }
@@ -424,7 +453,7 @@ class SeCVideoSegmentation:
     def segment_video(self, model, frames, positive_points="", negative_points="",
                      bbox="", input_mask=None, tracking_direction="forward",
                      annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=5,
-                     offload_video_to_cpu=False, unload_model_after_run=True):
+                     offload_video_to_cpu=False):
         """Perform video object segmentation"""
 
         try:
@@ -617,10 +646,12 @@ class SeCVideoSegmentation:
                 torch.cuda.empty_cache()
             gc.collect()
 
-            # Unload model completely if requested
-            if unload_model_after_run:
+            # Unload model if not cached
+            # If model is cached, SeCModelLoader will provide same instance to next node
+            # If not cached, each node gets fresh model that can be safely deleted
+            if model is not SeCModelLoader._cached_model:
                 try:
-                    # Clear all model components
+                    # Delete all model components to free memory completely
                     if hasattr(model, 'grounding_encoder'):
                         del model.grounding_encoder
                     if hasattr(model, 'vision_model'):
@@ -638,9 +669,11 @@ class SeCVideoSegmentation:
                     if torch.cuda.is_available():
                         torch.cuda.empty_cache()
 
-                    print("✓ Model unloaded from memory")
+                    print("✓ Model unloaded from memory (not cached)")
                 except Exception as e:
                     print(f"Warning: Model unload failed: {e}")
+            else:
+                print("✓ Model retained in cache for reuse")
 
             return (masks_tensor, obj_ids_tensor)
 
