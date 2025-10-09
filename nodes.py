@@ -49,25 +49,70 @@ def download_sec_model():
     Download SeC-4B model from HuggingFace to the first registered 'sams' folder.
     Returns the path to the downloaded model directory.
     """
-    from huggingface_hub import snapshot_download
+    try:
+        from huggingface_hub import snapshot_download
+    except ImportError as e:
+        raise RuntimeError(
+            "huggingface_hub is required for model download. "
+            "Please install it: pip install huggingface_hub>=0.20.0"
+        ) from e
 
-    sams_paths = folder_paths.get_folder_paths("sams")
+    try:
+        sams_paths = folder_paths.get_folder_paths("sams")
+    except Exception as e:
+        raise RuntimeError(f"Could not access model folder paths: {e}") from e
+
+    if not sams_paths:
+        raise RuntimeError("No 'sams' folder paths registered. Please check your ComfyUI installation.")
+
     destination = os.path.join(sams_paths[0], "SeC-4B")
 
     print("=" * 80)
     print("SeC-4B model not found. Downloading from HuggingFace...")
     print(f"Repository: OpenIXCLab/SeC-4B")
     print(f"Destination: {destination}")
+    print(f"Size: ~8.5 GB - This may take several minutes...")
     print("=" * 80)
 
     # Create directory if it doesn't exist
-    os.makedirs(destination, exist_ok=True)
+    try:
+        os.makedirs(destination, exist_ok=True)
+    except (PermissionError, OSError) as e:
+        raise RuntimeError(
+            f"Cannot create model directory at {destination}. "
+            f"Please check permissions. Error: {e}"
+        ) from e
 
-    snapshot_download(
-        repo_id="OpenIXCLab/SeC-4B",
-        local_dir=destination,
-        local_dir_use_symlinks=False
-    )
+    # Check disk space (rough estimate)
+    try:
+        import shutil
+        stat = shutil.disk_usage(os.path.dirname(destination))
+        free_gb = stat.free / (1024**3)
+        if free_gb < 10:
+            print(f"⚠ Warning: Low disk space ({free_gb:.1f} GB free). Download requires ~8.5 GB.")
+    except Exception:
+        pass  # Not critical
+
+    try:
+        snapshot_download(
+            repo_id="OpenIXCLab/SeC-4B",
+            local_dir=destination,
+            local_dir_use_symlinks=False
+        )
+    except Exception as e:
+        error_msg = str(e).lower()
+        if "connection" in error_msg or "network" in error_msg or "timeout" in error_msg:
+            raise RuntimeError(
+                f"Network error while downloading model: {e}\n"
+                "Please check your internet connection and try again."
+            ) from e
+        elif "space" in error_msg or "disk" in error_msg:
+            raise RuntimeError(
+                f"Insufficient disk space: {e}\n"
+                "Model download requires ~8.5 GB free space."
+            ) from e
+        else:
+            raise RuntimeError(f"Failed to download model from HuggingFace: {e}") from e
 
     print("=" * 80)
     print(f"✓ SeC-4B model downloaded successfully!")
@@ -143,8 +188,19 @@ class SeCModelLoader:
             device = "cuda:0" if torch.cuda.is_available() else "cpu"
         elif device.startswith("gpu"):
             # Map gpu0 -> cuda:0, gpu1 -> cuda:1, etc.
-            gpu_num = device[3:]  # Extract number after "gpu"
-            device = f"cuda:{gpu_num}"
+            try:
+                gpu_num = int(device[3:])  # Extract number after "gpu"
+                if torch.cuda.is_available():
+                    available_gpus = torch.cuda.device_count()
+                    if gpu_num >= available_gpus:
+                        raise ValueError(f"GPU {gpu_num} not available. System has {available_gpus} GPU(s) (0-{available_gpus-1})")
+                else:
+                    raise ValueError(f"CUDA not available but GPU device '{device}' was selected")
+                device = f"cuda:{gpu_num}"
+            except (ValueError, IndexError) as e:
+                if "invalid literal" in str(e):
+                    raise ValueError(f"Invalid GPU device format: '{device}'. Expected format: 'gpu0', 'gpu1', etc.")
+                raise
 
         # Force float32 for CPU mode to avoid dtype mismatches
         dtype_map = {
@@ -329,8 +385,8 @@ class SeCVideoSegmentation:
     DESCRIPTION = ("Concept-driven video object segmentation using Large Vision-Language Models for visual concept extraction. "
                    "Provide visual prompts (points/bbox/mask) and SeC automatically understands the object concept for robust tracking.")
     
-    def parse_points(self, points_str):
-        """Parse point coordinates from JSON string: '[{\"x\": 63, \"y\": 782}]'"""
+    def parse_points(self, points_str, image_shape=None):
+        """Parse point coordinates from JSON string and validate bounds"""
         import json
 
         if not points_str or not points_str.strip():
@@ -339,33 +395,83 @@ class SeCVideoSegmentation:
         try:
             points_list = json.loads(points_str)
 
-            if not isinstance(points_list, list) or len(points_list) == 0:
+            if not isinstance(points_list, list):
+                raise ValueError(f"Points must be a JSON array, got {type(points_list).__name__}")
+
+            if len(points_list) == 0:
                 return None, None
 
             points = []
-            for point_dict in points_list:
-                if isinstance(point_dict, dict) and 'x' in point_dict and 'y' in point_dict:
-                    points.append([float(point_dict['x']), float(point_dict['y'])])
+            for i, point_dict in enumerate(points_list):
+                if not isinstance(point_dict, dict):
+                    print(f"Warning: Point {i} is not a dictionary, skipping")
+                    continue
+
+                if 'x' not in point_dict or 'y' not in point_dict:
+                    print(f"Warning: Point {i} missing 'x' or 'y' key, skipping")
+                    continue
+
+                try:
+                    x = float(point_dict['x'])
+                    y = float(point_dict['y'])
+
+                    # Validate coordinates are non-negative
+                    if x < 0 or y < 0:
+                        print(f"Warning: Point {i} has negative coordinates ({x}, {y}), skipping")
+                        continue
+
+                    # Validate within image bounds if provided
+                    if image_shape is not None:
+                        height, width = image_shape[1], image_shape[2]  # [batch, height, width, channels]
+                        if x >= width or y >= height:
+                            print(f"Warning: Point {i} ({x}, {y}) outside image bounds ({width}x{height}), skipping")
+                            continue
+
+                    points.append([x, y])
+
+                except (ValueError, TypeError) as e:
+                    print(f"Warning: Could not convert point {i} coordinates to float: {e}, skipping")
+                    continue
 
             if not points:
                 return None, None
 
             return np.array(points, dtype=np.float32), np.ones(len(points), dtype=np.int32)
 
-        except (json.JSONDecodeError, ValueError, KeyError) as e:
+        except json.JSONDecodeError as e:
+            raise ValueError(f"Invalid JSON in points: {str(e)}")
+        except Exception as e:
             print(f"Error parsing points: {e}")
             return None, None
     
     def parse_bbox(self, bbox_str):
-        """Parse bounding box from string"""
-        if not bbox_str.strip():
+        """Parse bounding box from string and validate"""
+        if not bbox_str or not bbox_str.strip():
             return None
-            
-        coords = list(map(float, bbox_str.strip().split(',')))
-        if len(coords) != 4:
-            return None
-            
-        return np.array(coords, dtype=np.float32)
+
+        try:
+            coords = [float(x.strip()) for x in bbox_str.strip().split(',')]
+
+            if len(coords) != 4:
+                raise ValueError(f"Bounding box must have 4 coordinates, got {len(coords)}")
+
+            x1, y1, x2, y2 = coords
+
+            # Validate coordinates are sensible
+            if x1 >= x2:
+                raise ValueError(f"Invalid bbox: x1 ({x1}) must be < x2 ({x2})")
+            if y1 >= y2:
+                raise ValueError(f"Invalid bbox: y1 ({y1}) must be < y2 ({y2})")
+
+            if x1 < 0 or y1 < 0:
+                raise ValueError(f"Bounding box coordinates must be non-negative, got x1={x1}, y1={y1}")
+
+            return np.array(coords, dtype=np.float32)
+
+        except ValueError as e:
+            if "could not convert" in str(e):
+                raise ValueError(f"Invalid bbox format: '{bbox_str}'. Expected format: 'x1,y1,x2,y2' with numeric values")
+            raise  # Re-raise our custom errors
     
     def tensor_to_pil_images(self, tensor):
         """Convert tensor to list of PIL images"""
@@ -399,13 +505,27 @@ class SeCVideoSegmentation:
         mask_tensor = torch.from_numpy(mask_array.astype(np.float32))
         return mask_tensor
     
-    def save_frames_temporarily(self, pil_images, temp_dir="/tmp/sec_frames"):
+    def save_frames_temporarily(self, pil_images, temp_dir=None):
         """Save frames temporarily for video processing"""
+        import tempfile
+
+        # Use system temp directory for cross-platform compatibility
+        if temp_dir is None:
+            temp_base = tempfile.gettempdir()
+            temp_dir = os.path.join(temp_base, "sec_frames")
+
         os.makedirs(temp_dir, exist_ok=True)
 
-        for file in os.listdir(temp_dir):
-            if file.endswith(('.jpg', '.png')):
-                os.remove(os.path.join(temp_dir, file))
+        # Clean up old files safely
+        try:
+            for file in os.listdir(temp_dir):
+                if file.endswith(('.jpg', '.png')):
+                    try:
+                        os.remove(os.path.join(temp_dir, file))
+                    except (PermissionError, OSError) as e:
+                        print(f"Warning: Could not remove old frame file {file}: {e}")
+        except Exception as e:
+            print(f"Warning: Error during temp directory cleanup: {e}")
 
         frame_paths = []
         for i, img in enumerate(pil_images):
@@ -421,12 +541,52 @@ class SeCVideoSegmentation:
                      offload_video_to_cpu=False):
         """Perform video object segmentation"""
 
+        # === Input Validation ===
+        # Validate frames tensor
+        if frames is None or frames.numel() == 0:
+            raise ValueError("Frames tensor is empty. Please provide at least one frame.")
+
+        if frames.ndim != 4:
+            raise ValueError(f"Frames tensor must be 4D [batch, height, width, channels], got shape {frames.shape}")
+
+        num_frames = frames.shape[0]
+        if num_frames == 0:
+            raise ValueError("No frames provided. Frames tensor has 0 frames.")
+
+        # Validate annotation_frame_idx bounds
+        if annotation_frame_idx < 0:
+            raise ValueError(f"annotation_frame_idx must be >= 0, got {annotation_frame_idx}")
+
+        if annotation_frame_idx >= num_frames:
+            raise ValueError(
+                f"annotation_frame_idx ({annotation_frame_idx}) is out of bounds. "
+                f"Video has {num_frames} frame(s), valid range is 0-{num_frames-1}"
+            )
+
+        # Validate at least one input provided
+        has_input = (
+            (positive_points and positive_points.strip()) or
+            (negative_points and negative_points.strip()) or
+            (bbox and bbox.strip()) or
+            (input_mask is not None)
+        )
+        if not has_input:
+            raise ValueError(
+                "At least one visual prompt must be provided: "
+                "positive_points, negative_points, bbox, or input_mask"
+            )
+
+        video_dir = None  # Track for cleanup
         try:
             pil_images = self.tensor_to_pil_images(frames)
             video_dir, frame_paths = self.save_frames_temporarily(pil_images)
 
             # Automatically set offload_state_to_cpu based on model device
-            offload_state_to_cpu = str(model.device) == "cpu"
+            try:
+                offload_state_to_cpu = str(model.device) == "cpu"
+            except AttributeError:
+                # Fallback if model doesn't have device attribute
+                offload_state_to_cpu = False
 
             inference_state = model.grounding_encoder.init_state(
                 video_path=video_dir,
@@ -435,8 +595,9 @@ class SeCVideoSegmentation:
             )
             model.grounding_encoder.reset_state(inference_state)
 
-            pos_points, pos_labels = self.parse_points(positive_points)
-            neg_points, neg_labels = self.parse_points(negative_points)
+            # Parse inputs with bounds checking
+            pos_points, pos_labels = self.parse_points(positive_points, frames.shape)
+            neg_points, neg_labels = self.parse_points(negative_points, frames.shape)
             bbox_coords = self.parse_bbox(bbox)
 
             init_mask = None
@@ -602,19 +763,26 @@ class SeCVideoSegmentation:
             masks_tensor = torch.stack(output_masks)
             obj_ids_tensor = torch.tensor(output_obj_ids, dtype=torch.int32)
 
-            import shutil
-            import gc
-            if os.path.exists(video_dir):
-                shutil.rmtree(video_dir)
-
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            gc.collect()
-
             return (masks_tensor, obj_ids_tensor)
 
         except Exception as e:
             raise RuntimeError(f"SeC video segmentation failed: {str(e)}")
+
+        finally:
+            # Cleanup: Always remove temp directory and clear cache
+            import shutil
+            import gc
+
+            if video_dir is not None and os.path.exists(video_dir):
+                try:
+                    shutil.rmtree(video_dir)
+                except Exception as e:
+                    print(f"Warning: Failed to clean up temp directory {video_dir}: {e}")
+
+            # Clear GPU cache if available
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
 
 
 class CoordinatePlotter:
