@@ -31,21 +31,14 @@ The result? SeC tracks objects more reliably through challenging scenarios like 
 ## Installation
 
 ### 1. Install Custom Node
-Copy the `comfyui_sec_nodes` folder to your ComfyUI custom_nodes directory:
-
-**Windows Portable:**
 ```
-ComfyUI_windows_portable\ComfyUI\custom_nodes\comfyui_sec_nodes\
-```
-
-**Standard Install:**
-```
-ComfyUI\custom_nodes\comfyui_sec_nodes\
+cd \*installdirectory*\ComfyUI\custom_nodes\
+git clone https://github.com/9nate-drake/Comfyui-SecNodes
 ```
 
 ### 2. Install Dependencies
 ```bash
-cd ComfyUI/custom_nodes/comfyui_sec_nodes
+cd ComfyUI/custom_nodes/Comfyui-SecNodes
 pip install -r requirements.txt
 ```
 
@@ -70,14 +63,6 @@ huggingface-cli download OpenIXCLab/SeC-4B --local-dir SeC-4B
 
 # Or using git lfs
 git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
-```
-
-**Custom Model Locations (Advanced)**
-You can specify custom model paths using ComfyUI's `extra_model_paths.yaml`:
-```yaml
-comfyui:
-  base_path: /your/custom/path/
-  sams: models/sams/
 ```
 
 ## Nodes Reference
