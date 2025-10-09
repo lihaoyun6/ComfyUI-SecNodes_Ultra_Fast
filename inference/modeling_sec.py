@@ -679,7 +679,7 @@ class SeCModel(PreTrainedModel):
             input=text, round=1, bot_name=self.bot_name)
 
         ids = self.tokenizer.encode(input_text)
-        ids = torch.tensor(ids).cuda().unsqueeze(0)
+        ids = torch.tensor(ids).to(self.device).unsqueeze(0)
 
         attention_mask = torch.ones_like(ids, dtype=torch.bool)
 
