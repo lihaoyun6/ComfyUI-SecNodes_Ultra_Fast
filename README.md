@@ -6,10 +6,10 @@
 
 **SeC (Segment Concept)** is a breakthrough in video object segmentation that shifts from simple feature matching to **high-level conceptual understanding**. Unlike SAM 2.1 which relies primarily on visual similarity, SeC uses a **Large Vision-Language Model (LVLM)** to understand *what* an object is conceptually, enabling robust tracking through:
 
-- 🧠 **Semantic Understanding**: Recognizes objects by concept, not just appearance
-- 🎯 **Scene Complexity Adaptation**: Automatically balances semantic reasoning vs feature matching
-- 💪 **Superior Robustness**: Handles occlusions, appearance changes, and complex scenes better than SAM 2.1
-- 📊 **SOTA Performance**: +11.8 points over SAM 2.1 on SeCVOS benchmark
+- **Semantic Understanding**: Recognizes objects by concept, not just appearance
+- **Scene Complexity Adaptation**: Automatically balances semantic reasoning vs feature matching
+- **Superior Robustness**: Handles occlusions, appearance changes, and complex scenes better than SAM 2.1
+- **SOTA Performance**: +11.8 points over SAM 2.1 on SeCVOS benchmark
 
 ### How SeC Works
 
@@ -22,11 +22,11 @@ The result? SeC tracks objects more reliably through challenging scenarios like 
 
 ## Features
 
-- 🔥 **SeC Model Loader**: Load SeC models with simple settings
-- 🎯 **SeC Video Segmentation**: SOTA video segmentation with visual prompts
-- 🎨 **Coordinate Plotter**: Visualize coordinate points before segmentation
-- 🚀 **Self-Contained**: All inference code bundled - no external repos needed
-- ⚡ **Bidirectional Tracking**: Track from any frame in any direction
+- **SeC Model Loader**: Load SeC models with simple settings
+- **SeC Video Segmentation**: SOTA video segmentation with visual prompts
+- **Coordinate Plotter**: Visualize coordinate points before segmentation
+- **Self-Contained**: All inference code bundled - no external repos needed
+- **Bidirectional Tracking**: Track from any frame in any direction
 
 ## Installation
 
@@ -87,8 +87,8 @@ Load and configure the SeC model for inference. Automatically downloads SeC-4B m
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| **torch_dtype** | CHOICE | `bfloat16` | Precision: bfloat16 (recommended), float16, float32 |
-| **device** | CHOICE | `auto` | Device selection (dynamically detects available GPUs):<br>• `auto`: gpu0 if available, else CPU (recommended)<br>• `cpu`: Force CPU<br>• `gpu0`, `gpu1`, etc.: Specific GPU<br>• `multi-gpu`: Split model across all GPUs (only shown if 2+ GPUs) |
+| **torch_dtype** | CHOICE | `bfloat16` | Precision: bfloat16 (recommended for GPU), float16, float32.<br>**Note:** CPU mode automatically uses float32 regardless of selection |
+| **device** | CHOICE | `auto` | Device selection (dynamically detects available GPUs):<br>• `auto`: gpu0 if available, else CPU (recommended)<br>• `cpu`: Force CPU (automatically uses float32)<br>• `gpu0`, `gpu1`, etc.: Specific GPU |
 | *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference |
 | *allow_mask_overlap* | BOOLEAN | True | Allow objects to overlap (disable for strict separation) |
 
@@ -98,10 +98,11 @@ Load and configure the SeC model for inference. Automatically downloads SeC-4B m
 - The model is automatically located in `models/sams/SeC-4B/` or downloaded from HuggingFace if not found.
 - **Device options dynamically adapt** to your system:
   - 1 GPU system: Shows `auto`, `cpu`, `gpu0`
-  - 2 GPU system: Shows `auto`, `cpu`, `gpu0`, `gpu1`, `multi-gpu`
-  - 3+ GPU system: Shows all available GPUs plus `multi-gpu` option
+  - 2 GPU system: Shows `auto`, `cpu`, `gpu0`, `gpu1`
+  - 3+ GPU system: Shows all available GPUs
   - No GPU: Shows only `auto` and `cpu`
-- Dtype conversion hooks are automatically installed for all GPU modes to ensure proper precision handling
+- **CPU mode**: Automatically overrides to float32 precision to avoid dtype mismatch errors. CPU inference is significantly slower than GPU.
+- Dtype conversion hooks are automatically installed for GPU modes to ensure proper precision handling
 - Model is automatically unloaded from memory after workflow completes (relies on Python garbage collection)
 
 ---
@@ -234,17 +235,26 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 
 - **Python**: 3.10-3.12
 - **PyTorch**: Included with ComfyUI
-- **CUDA GPU**: Recommended (CPU supported but slow)
+- **CUDA GPU**: Recommended (CPU supported but significantly slower)
 - **VRAM**: ~12-16GB for SeC-4B model with bfloat16
   - Can reduce significantly by enabling `offload_video_to_cpu` (~3% speed penalty)
   - Lower `mllm_memory_size` (default: 5) for additional memory savings
 
-## Links & Resources
+**Note on CPU Mode:**
+- CPU inference automatically uses float32 precision (bfloat16/float16 not supported on CPU)
+- Expect significantly slower performance compared to GPU (~10-20x slower depending on hardware)
+- Not recommended for production use, mainly for testing or systems without GPUs
 
-- 📄 **Paper**: [arXiv:2507.15852](https://arxiv.org/abs/2507.15852)
-- 🤗 **Model**: [OpenIXCLab/SeC-4B](https://huggingface.co/OpenIXCLab/SeC-4B)
-- 📊 **Dataset**: [SeCVOS Benchmark](https://huggingface.co/datasets/OpenIXCLab/SeCVOS)
-- 💻 **Original Repo**: [GitHub - SeC](https://github.com/OpenIXCLab/SeC)
+## Attribution
+
+This node implements the **SeC-4B** model developed by OpenIXCLab.
+
+- **Model Repository**: [OpenIXCLab/SeC-4B](https://huggingface.co/OpenIXCLab/SeC-4B)
+- **Paper**: [arXiv:2507.15852](https://arxiv.org/abs/2507.15852)
+- **Official Implementation**: [github.com/OpenIXCLab/SeC](https://github.com/OpenIXCLab/SeC)
+- **License**: Apache 2.0
+
+**Dataset**: The original work includes the [SeCVOS Benchmark](https://huggingface.co/datasets/OpenIXCLab/SeCVOS) dataset.
 
 ## Troubleshooting
 
@@ -266,7 +276,7 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 
 **Empty masks**: Provide clearer visual prompts or try different frame
 
-**High memory usage**: Reduce `mllm_memory_size` (default 5, try 3) - trades some quality for memory
+**High memory usage**: Reduce `mllm_memory_size` (default 12, try 5) - trades some quality for memory
 
 ---
 

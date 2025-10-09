@@ -1,3 +1,7 @@
+# Uses SeC-4B model from OpenIXCLab
+# Model: https://huggingface.co/OpenIXCLab/SeC-4B
+# Licensed under Apache 2.0
+
 import torch
 import numpy as np
 from PIL import Image
@@ -88,18 +92,15 @@ class SeCModelLoader:
             for i in range(gpu_count):
                 device_choices.append(f"gpu{i}")
 
-            if gpu_count > 1:
-                device_choices.append("multi-gpu")
-
         return {
             "required": {
                 "torch_dtype": (["bfloat16", "float16", "float32"], {
                     "default": "bfloat16",
-                    "tooltip": "Data precision for model inference. bfloat16 recommended for best speed/quality balance."
+                    "tooltip": "Data precision for model inference. bfloat16 recommended for best speed/quality balance. CPU mode automatically uses float32."
                 }),
                 "device": (device_choices, {
                     "default": "auto",
-                    "tooltip": "Device: auto (gpu0 if available, else CPU), cpu, gpu0-N (specific GPU), multi-gpu (split across all GPUs)"
+                    "tooltip": "Device: auto (gpu0 if available, else CPU), cpu, gpu0/gpu1/etc (specific GPU)"
                 })
             },
             "optional": {
@@ -138,22 +139,24 @@ class SeCModelLoader:
             print("=" * 80)
 
         # Handle device selection
-        original_device = device
         if device == "auto":
             device = "cuda:0" if torch.cuda.is_available() else "cpu"
         elif device.startswith("gpu"):
             # Map gpu0 -> cuda:0, gpu1 -> cuda:1, etc.
             gpu_num = device[3:]  # Extract number after "gpu"
             device = f"cuda:{gpu_num}"
-        elif device == "multi-gpu":
-            device = "cuda"  # Will use device_map='auto' to split
 
+        # Force float32 for CPU mode to avoid dtype mismatches
         dtype_map = {
             "bfloat16": torch.bfloat16,
             "float16": torch.float16,
             "float32": torch.float32
         }
         torch_dtype = dtype_map[torch_dtype]
+
+        if device == "cpu" and torch_dtype != torch.float32:
+            print(f"⚠ CPU mode requires float32 precision. Overriding {torch_dtype} -> float32")
+            torch_dtype = torch.float32
 
         hydra_overrides_extra = []
         overlap_value = "false" if allow_mask_overlap else "true"
@@ -170,14 +173,7 @@ class SeCModelLoader:
             }
 
             # Configure device_map based on device selection
-            if original_device == "multi-gpu":
-                import gc
-                gc.collect()
-                torch.cuda.empty_cache()
-                load_kwargs["device_map"] = "auto"  # Split across all GPUs
-                load_kwargs["low_cpu_mem_usage"] = True
-                print(f"Loading SeC model with device_map='auto' (multi-GPU)...")
-            elif device.startswith("cuda:"):
+            if device.startswith("cuda:"):
                 import gc
                 gc.collect()
                 torch.cuda.empty_cache()
@@ -187,15 +183,17 @@ class SeCModelLoader:
             else:
                 # CPU mode
                 load_kwargs["low_cpu_mem_usage"] = True
-                print(f"Loading SeC model on CPU...")
+                print(f"Loading SeC model on CPU (float32)...")
 
             model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
 
-            if device.startswith("cuda") and torch_dtype != torch.float32 and original_device != "multi-gpu":
+            # Convert model to target device and dtype
+            if device.startswith("cuda") and torch_dtype != torch.float32:
                 print(f"Converting model to {torch_dtype}...")
                 model = model.to(dtype=torch_dtype)
-            elif device == "cpu":
-                model = model.to(device)
+            else:
+                # CPU mode - ensure everything is float32
+                model = model.to(device=device, dtype=torch_dtype)
 
             tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
             model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
@@ -311,7 +309,7 @@ class SeCVideoSegmentation:
                     "tooltip": "Advanced: Max frames to process (-1 for all)"
                 }),
                 "mllm_memory_size": ("INT", {
-                    "default": 5,
+                    "default": 12,
                     "min": 1,
                     "max": 20,
                     "tooltip": "Advanced: Frames in multimodal memory. Lower values use less memory."
@@ -419,7 +417,7 @@ class SeCVideoSegmentation:
     
     def segment_video(self, model, frames, positive_points="", negative_points="",
                      bbox="", input_mask=None, tracking_direction="forward",
-                     annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=5,
+                     annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=12,
                      offload_video_to_cpu=False):
         """Perform video object segmentation"""
 
