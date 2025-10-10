@@ -24,8 +24,6 @@ from .sam2.modeling.memory_attention import MemoryAttention, MemoryAttentionLaye
 from .sam2.modeling.sam.transformer import RoPEAttention
 from .sam2.modeling.memory_encoder import MemoryEncoder, MaskDownSampler, Fuser, CXBlock
 
-# Local class registry - maps target strings to actual classes for complete import isolation
-# Note: SAM2VideoPredictor will be added after class definition
 LOCAL_CLASS_REGISTRY = {
     "inference.sam2.modeling.sam2_base.SAM2Base": SAM2Base,
     "inference.sam2.modeling.backbones.hieradet.Hiera": Hiera,
@@ -48,15 +46,12 @@ def build_sam2_video_predictor(
     apply_postprocessing=True,
     **kwargs,
 ):
-    # Get the directory of this file to locate local configs
     current_dir = os.path.dirname(os.path.abspath(__file__))
     config_dir = os.path.join(current_dir, "..", "configs")
     config_path = os.path.join(config_dir, config_file)
-    
-    # Load config directly from YAML file
+
     cfg = OmegaConf.load(config_path)
-    
-    # Apply overrides manually
+
     hydra_overrides = [
         "++model._target_=inference.sam2_video_predictor.SAM2VideoPredictor",
     ]
@@ -76,14 +71,11 @@ def build_sam2_video_predictor(
         f"model.num_maskmem={num_maskmem}"
     )
     hydra_overrides.extend(hydra_overrides_extra)
-    
-    # Apply overrides to config manually
+
     for override in hydra_overrides:
         if override.startswith("++"):
-            # Handle new key addition
             key_path = override[2:].split("=")[0]
             value = "=".join(override[2:].split("=")[1:])
-            # Convert string values to appropriate types
             if value.lower() in ["true", "false"]:
                 value = value.lower() == "true"
             elif value.replace(".", "").replace("-", "").isdigit():
@@ -91,8 +83,7 @@ def build_sam2_video_predictor(
                     value = float(value)
                 else:
                     value = int(value)
-            
-            # Set nested config value
+
             keys = key_path.split(".")
             current = cfg
             for key in keys[:-1]:
@@ -101,11 +92,9 @@ def build_sam2_video_predictor(
                 current = current[key]
             current[keys[-1]] = value
         else:
-            # Handle simple overrides
             if "=" in override:
                 key_path = override.split("=")[0]
                 value = "=".join(override.split("=")[1:])
-                # Convert string values to appropriate types
                 if value.lower() in ["true", "false"]:
                     value = value.lower() == "true"
                 elif value.replace(".", "").replace("-", "").isdigit():
@@ -113,8 +102,7 @@ def build_sam2_video_predictor(
                         value = float(value)
                     else:
                         value = int(value)
-                
-                # Set nested config value
+
                 keys = key_path.split(".")
                 current = cfg
                 for key in keys[:-1]:
@@ -124,40 +112,30 @@ def build_sam2_video_predictor(
                 current[keys[-1]] = value
 
     OmegaConf.resolve(cfg)
-    
-    # We need to use a recursive instantiation function that creates the nested components
-    # but avoids Hydra's global import resolution for the top-level target
+
     def create_component(config_node):
         """Recursively create components from config, handling all OmegaConf types properly"""
-        # Handle ListConfig (arrays)
         if OmegaConf.is_list(config_node):
             return [create_component(item) for item in config_node]
-        
-        # Handle DictConfig (objects)  
+
         elif OmegaConf.is_dict(config_node):
             if '_target_' in config_node:
                 target = config_node._target_
-                # Remove the _target_ key and get remaining kwargs
                 kwargs = {k: create_component(v) for k, v in config_node.items() if k != '_target_'}
-                
-                # Import and instantiate the target class
+
                 module_path, class_name = target.rsplit('.', 1)
-                
-                # Use local class registry - complete isolation from global import system
+
                 if target in LOCAL_CLASS_REGISTRY:
                     cls = LOCAL_CLASS_REGISTRY[target]
                     return cls(**kwargs)
                 else:
                     raise RuntimeError(f"Unknown local target: {target}. Available targets: {list(LOCAL_CLASS_REGISTRY.keys())}")
             else:
-                # It's a config dict without _target_, recursively process items
                 return {k: create_component(v) for k, v in config_node.items()}
-        
-        # Handle primitive values (strings, numbers, booleans, None)
+
         else:
             return config_node
-    
-    # Create the model using our custom instantiation
+
     model = create_component(cfg.model)
     
     return model
@@ -198,15 +176,13 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
         device = current_vision_feats[-1].device
         # The case of `self.num_maskmem == 0` below is primarily used for reproducing SAM on images.
         # In this case, we skip the fusion with any memory.
-        if self.num_maskmem == 0:  # Disable memory and skip fusion
+        if self.num_maskmem == 0:
             pix_feat = current_vision_feats[-1].permute(1, 2, 0).view(B, C, H, W)
             return pix_feat
 
         num_obj_ptr_tokens = 0
         tpos_sign_mul = -1 if track_in_reverse else 1
-        # Step 1: condition the visual features of the current frame on previous memories
         if not is_init_cond_frame:
-            # Retrieve the memories encoded with the maskmem backbone
             to_cat_memory, to_cat_memory_pos_embed = [], []
             # Add conditioning frames's output first (all cond frames have t_pos=0 for
             # when getting temporal positional embedding below)
@@ -249,21 +225,15 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
 
             for t_pos, prev in t_pos_and_prevs:
                 if prev is None:
-                    continue  # skip padding frames
-                # "maskmem_features" might have been offloaded to CPU in demo use cases,
-                # so we load it back to GPU (it's a no-op if it's already on GPU).
+                    continue
                 feats = prev["maskmem_features"].to(device, non_blocking=True)
                 to_cat_memory.append(feats.flatten(2).permute(2, 0, 1))
-                # Spatial positional encoding (it might have been offloaded to CPU in eval)
                 maskmem_enc = prev["maskmem_pos_enc"][-1].to(device)
                 maskmem_enc = maskmem_enc.flatten(2).permute(2, 0, 1)
-                # Temporal positional encoding
                 maskmem_enc = (
                     maskmem_enc + self.maskmem_tpos_enc[self.num_maskmem - t_pos - 1]
                 )
                 to_cat_memory_pos_embed.append(maskmem_enc)
-
-            # Construct the list of past object pointers
             if self.use_obj_ptrs_in_encoder:
                 max_obj_ptrs_in_encoder = min(num_frames, self.max_obj_ptrs_in_encoder)
                 # First add those object pointers from selected conditioning frames
@@ -277,7 +247,6 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
                 else:
                     ptr_cond_outputs = selected_cond_outputs
                 pos_and_ptrs = [
-                    # Temporal pos encoding contains how far away each pointer is from current frame
                     (
                         (
                             (frame_idx - t) * tpos_sign_mul
@@ -288,25 +257,17 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
                     )
                     for t, out in ptr_cond_outputs.items()
                 ]
-                # Add up to (max_obj_ptrs_in_encoder - 1) non-conditioning frames before current frame
                 for t_diff in range(1, max_obj_ptrs_in_encoder):
-                    # t = frame_idx + t_diff if track_in_reverse else frame_idx - t_diff
                     if -t_diff <= -len(valid_indices):
                         break
-                    # if t < 0 or (num_frames is not None and t >= num_frames):
-                    #     break
                     out = output_dict["non_cond_frame_outputs"].get(
                         valid_indices[-t_diff], unselected_cond_outputs.get(valid_indices[-t_diff], None)
                     )
                     if out is not None:
                         pos_and_ptrs.append((t_diff, out["obj_ptr"].to(device, non_blocking=True)))
-                # If we have at least one object pointer, add them to the across attention
                 if len(pos_and_ptrs) > 0:
                     pos_list, ptrs_list = zip(*pos_and_ptrs)
-                    # stack object pointers along dim=0 into [ptr_seq_len, B, C] shape
                     obj_ptrs = torch.stack(ptrs_list, dim=0)
-                    # a temporal positional embedding based on how far each object pointer is from
-                    # the current frame (sine embedding normalized by the max pointer num).
                     if self.add_tpos_enc_to_obj_ptrs:
                         t_diff_max = max_obj_ptrs_in_encoder - 1
                         tpos_dim = C if self.proj_tpos_enc_in_obj_ptrs else self.mem_dim
@@ -319,7 +280,6 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
                     else:
                         obj_pos = obj_ptrs.new_zeros(len(pos_list), B, self.mem_dim)
                     if self.mem_dim < C:
-                        # split a pointer into (C // self.mem_dim) tokens for self.mem_dim < C
                         obj_ptrs = obj_ptrs.reshape(
                             -1, B, C // self.mem_dim, self.mem_dim
                         )
@@ -331,18 +291,14 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
                 else:
                     num_obj_ptr_tokens = 0
         else:
-            # for initial conditioning frames, encode them without using any previous memory
             if self.directly_add_no_mem_embed:
-                # directly add no-mem embedding (instead of using the transformer encoder)
                 pix_feat_with_mem = current_vision_feats[-1] + self.no_mem_embed
                 pix_feat_with_mem = pix_feat_with_mem.permute(1, 2, 0).view(B, C, H, W)
                 return pix_feat_with_mem
 
-            # Use a dummy token on the first frame (to avoid empty memory input to tranformer encoder)
             to_cat_memory = [self.no_mem_embed.expand(1, B, self.mem_dim)]
             to_cat_memory_pos_embed = [self.no_mem_pos_enc.expand(1, B, self.mem_dim)]
 
-        # Step 2: Concatenate the memories and forward through the transformer encoder
         memory = torch.cat(to_cat_memory, dim=0)
         memory_pos_embed = torch.cat(to_cat_memory_pos_embed, dim=0)
 
@@ -353,7 +309,6 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
             memory_pos=memory_pos_embed,
             num_obj_ptr_tokens=num_obj_ptr_tokens,
         )
-        # reshape the output (HW)BC => BCHW
         pix_feat_with_mem = pix_feat_with_mem.permute(1, 2, 0).view(B, C, H, W)
         return pix_feat_with_mem
     
@@ -375,7 +330,6 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
         language_embd=None,
     ):
         current_out = {"point_inputs": point_inputs, "mask_inputs": mask_inputs}
-        # High-resolution feature maps for the SAM head, reshape (HW)BC => BCHW
         if len(current_vision_feats) > 1:
             high_res_features = [
                 x.permute(1, 2, 0).view(x.size(1), x.size(2), *s)
@@ -384,15 +338,12 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
         else:
             high_res_features = None
         if mask_inputs is not None and self.use_mask_input_as_output_without_sam:
-            # When use_mask_input_as_output_without_sam=True, we directly output the mask input
-            # (see it as a GT mask) without using a SAM prompt encoder + mask decoder.
             pix_feat = current_vision_feats[-1].permute(1, 2, 0)
             pix_feat = pix_feat.view(-1, self.hidden_dim, *feat_sizes[-1])
             sam_outputs = self._use_mask_as_output(
                 pix_feat, high_res_features, mask_inputs
             )
         else:
-            # fused the visual feature with previous memory features in the memory bank            
             pix_feat = self._prepare_memory_conditioned_features(
                 frame_idx=frame_idx,
                 is_init_cond_frame=is_init_cond_frame,
@@ -419,10 +370,6 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
                 pix_feat_with_language = pix_feat_with_language.permute(1, 2, 0).view(1, 256, 64, 64)
                 pix_feat = (pix_feat_with_language + pix_feat) / 2
 
-            # apply SAM-style segmentation head
-            # here we might feed previously predicted low-res SAM mask logits into the SAM mask decoder,
-            # e.g. in demo where such logits come from earlier interaction instead of correction sampling
-            # (in this case, any `mask_inputs` shouldn't reach here as they are sent to _use_mask_as_output instead)
             if prev_sam_mask_logits is not None:
                 assert point_inputs is not None and mask_inputs is None
                 mask_inputs = prev_sam_mask_logits
@@ -491,13 +438,9 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
         current_out["obj_ptr"] = obj_ptr
         current_out["low_res_multimasks"] = low_res_multimasks
         if not self.training:
-            # Only add this in inference (to avoid unused param in activation checkpointing;
-            # it's mainly used in the demo to encode spatial memories w/ consolidated masks)
             current_out["object_score_logits"] = object_score_logits
             current_out["ious"] = ious
 
-        # Finally run the memory encoder on the predicted mask to encode
-        # it into a new memory feature (that can be used in future frames)
         self._encode_memory_in_output(
             current_vision_feats,
             feat_sizes,
@@ -526,7 +469,6 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
         language_embd=None,
     ):
         """Run tracking on a single frame based on current inputs and previous memory."""
-        # Retrieve correct image features
         (
             _,
             _,
@@ -535,7 +477,6 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
             feat_sizes,
         ) = self._get_image_feature(inference_state, frame_idx, batch_size)
 
-        # point and mask should not appear as input simultaneously on the same frame
         assert point_inputs is None or mask_inputs is None
         current_out = self.track_step(
             frame_idx=frame_idx,
@@ -554,28 +495,23 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
             language_embd=language_embd,
         )
 
-        # optionally offload the output to CPU memory to save GPU space
         storage_device = inference_state["storage_device"]
         maskmem_features = current_out["maskmem_features"]
         if maskmem_features is not None:
             maskmem_features = maskmem_features.to(torch.bfloat16)
             maskmem_features = maskmem_features.to(storage_device, non_blocking=True)
         pred_masks_gpu = current_out["pred_masks"]
-        # potentially fill holes in the predicted masks
         if self.fill_hole_area > 0:
             pred_masks_gpu = fill_holes_in_mask_scores(
                 pred_masks_gpu, self.fill_hole_area
             )
         pred_masks = pred_masks_gpu.to(storage_device, non_blocking=True)
-        # "maskmem_pos_enc" is the same across frames, so we only need to store one copy of it
         maskmem_pos_enc = self._get_maskmem_pos_enc(inference_state, current_out)
-        # object pointer is a small tensor, so we always keep it on GPU memory for fast access
         obj_ptr = current_out["obj_ptr"]
         ious = current_out["ious"]
         object_score_logits = current_out["object_score_logits"]
         low_res_multimasks = current_out["low_res_multimasks"]
-        
-        # make a compact version of this frame's output to reduce the state size
+
         compact_current_out = {
             "maskmem_features": maskmem_features,
             "maskmem_pos_enc": maskmem_pos_enc,
@@ -588,7 +524,6 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
         return compact_current_out, pred_masks_gpu
 
 
-# Add SAM2VideoPredictor to registry after class definition
 LOCAL_CLASS_REGISTRY["inference.sam2_video_predictor.SAM2VideoPredictor"] = SAM2VideoPredictor
 
 

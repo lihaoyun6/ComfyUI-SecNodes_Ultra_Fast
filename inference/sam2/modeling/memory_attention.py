@@ -35,7 +35,6 @@ class MemoryAttentionLayer(nn.Module):
         self.self_attn = self_attention
         self.cross_attn_image = cross_attention
 
-        # Implementation of Feedforward model
         self.linear1 = nn.Linear(d_model, dim_feedforward)
         self.dropout = nn.Dropout(dropout)
         self.linear2 = nn.Linear(dim_feedforward, d_model)
@@ -50,13 +49,11 @@ class MemoryAttentionLayer(nn.Module):
         self.activation_str = activation
         self.activation = get_activation_fn(activation)
 
-        # Where to add pos enc
         self.pos_enc_at_attn = pos_enc_at_attn
         self.pos_enc_at_cross_attn_queries = pos_enc_at_cross_attn_queries
         self.pos_enc_at_cross_attn_keys = pos_enc_at_cross_attn_keys
 
     def _forward_sa(self, tgt, query_pos):
-        # Self-Attention
         tgt2 = self.norm1(tgt)
         q = k = tgt2 + query_pos if self.pos_enc_at_attn else tgt2
         tgt2 = self.self_attn(q, k, v=tgt2)
@@ -69,7 +66,6 @@ class MemoryAttentionLayer(nn.Module):
             assert isinstance(self.cross_attn_image, RoPEAttention)
             kwds = {"num_k_exclude_rope": num_k_exclude_rope}
 
-        # Cross-Attention
         tgt2 = self.norm2(tgt)
         tgt2 = self.cross_attn_image(
             q=tgt2 + query_pos if self.pos_enc_at_cross_attn_queries else tgt2,
@@ -89,10 +85,8 @@ class MemoryAttentionLayer(nn.Module):
         num_k_exclude_rope: int = 0,
     ) -> torch.Tensor:
 
-        # Self-Attn, Cross-Attn
         tgt = self._forward_sa(tgt, query_pos)
         tgt = self._forward_ca(tgt, memory, query_pos, pos, num_k_exclude_rope)
-        # MLP
         tgt2 = self.norm3(tgt)
         tgt2 = self.linear2(self.dropout(self.activation(self.linear1(tgt2))))
         tgt = tgt + self.dropout3(tgt2)
@@ -124,7 +118,6 @@ class MemoryAttention(nn.Module):
         memory_pos: Optional[Tensor] = None,  # pos_enc for cross-attention inputs
         num_obj_ptr_tokens: int = 0,  # number of object pointer *tokens*
     ):
-        # Ensure all inputs match model dtype
         try:
             model_dtype = next(self.parameters()).dtype
             if not isinstance(curr, list):
@@ -155,7 +148,6 @@ class MemoryAttention(nn.Module):
             output = output + 0.1 * curr_pos
 
         if self.batch_first:
-            # Convert to batch first
             output = output.transpose(0, 1)
             curr_pos = curr_pos.transpose(0, 1)
             memory = memory.transpose(0, 1)
@@ -176,7 +168,6 @@ class MemoryAttention(nn.Module):
         normed_output = self.norm(output)
 
         if self.batch_first:
-            # Convert back to seq first
             normed_output = normed_output.transpose(0, 1)
             curr_pos = curr_pos.transpose(0, 1)
 
