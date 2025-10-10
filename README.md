@@ -139,6 +139,11 @@ You can combine different input types for powerful segmentation control:
 - **Mask + negative exclusions**: Mask an object, add negative points on unwanted parts (e.g., exclude a hand from a person mask)
 - **Point filtering**: Positive points outside the mask boundary are automatically ignored, preventing accidental selections
 
+**⚠ Important Note on Negative Points with Masks:**
+- Negative points work best when placed **inside or near** the masked region
+- Negative points far outside the mask (>50 pixels away) may cause unexpected results or empty segmentation
+- You'll receive a warning in the console if negative points are too far from the mask
+
 ---
 
 ### 3. Coordinate Plotter

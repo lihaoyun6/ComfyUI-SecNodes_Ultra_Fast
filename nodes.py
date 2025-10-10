@@ -673,6 +673,28 @@ class SeCVideoSegmentation:
                     pos_points = None
                     pos_labels = None
 
+            # Step 2b: Warn about negative points when mask is provided
+            # Negative points should ideally be inside or near the mask to refine segmentation
+            if init_mask is not None and neg_points is not None:
+                # Find pixels in the mask
+                mask_pixels = np.argwhere(init_mask)
+                if len(mask_pixels) > 0:
+                    points_outside = []
+                    for i, point in enumerate(neg_points):
+                        x, y = int(point[0]), int(point[1])
+                        # Calculate minimum distance to any mask pixel
+                        distances = np.sqrt(((mask_pixels[:, 0] - y) ** 2) + ((mask_pixels[:, 1] - x) ** 2))
+                        min_dist = distances.min()
+
+                        # If point is >50 pixels away from mask, warn
+                        if min_dist > 50:
+                            points_outside.append((i, min_dist))
+
+                    if points_outside:
+                        print(f"⚠ Warning: {len(points_outside)} negative point(s) are far from the mask region.")
+                        print(f"  Negative points work best inside or near the masked object to refine segmentation.")
+                        print(f"  Points far outside the mask may cause unexpected results or empty segmentation.")
+
             # Step 3: Combine points for refinement
             points = None
             labels = None
