@@ -30,7 +30,7 @@ https://github.com/user-attachments/assets/5cc6677e-4a9d-4e55-801d-b92305a37725
 
 https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
 
-*Example: SAM fails to track correct dog*
+*Example: SAM fails to track correct dog for some scenes*
 
 ## Features
 
