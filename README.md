@@ -49,6 +49,14 @@ git clone https://github.com/9nate-drake/Comfyui-SecNodes
 ```
 
 ### 2. Install Dependencies
+
+**If using ComfyUI Portable:**
+```bash
+cd *install_location*/ComfyUI/custom_nodes/Comfyui-SecNodes
+*install_location*\python_embeded\python.exe -m pip install -r requirements.txt
+```
+
+**If using standard Python installation:**
 ```bash
 cd ComfyUI/custom_nodes/Comfyui-SecNodes
 pip install -r requirements.txt
