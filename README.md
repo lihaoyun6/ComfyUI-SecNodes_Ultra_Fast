@@ -287,7 +287,7 @@ Based on extensive testing, here are recommended configurations for different GP
 The `mllm_memory_size` parameter controls how many historical keyframes SeC's Large Vision-Language Model uses for semantic understanding:
 
 - **What it does**: Stores frame references for the LVLM to analyze when scene changes occur
-- **VRAM impact**: None - testing shows values 3-20 use identical VRAM (~11-13GB for typical videos)
+- **VRAM impact**: None - testing shows values 3-20 use similar VRAM (~11-13GB for typical videos)
 - **Compute impact**: Higher values mean more frames processed through the vision encoder on scene changes
 - **Quality trade-off**: More keyframes = better object concept understanding in complex scenes
 - **Recommended**: Keep at 20 (default) for best quality. Only reduce if targeting very low-end GPUs (8GB or less)
