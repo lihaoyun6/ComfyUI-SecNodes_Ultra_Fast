@@ -151,7 +151,7 @@ class SeCModelLoader:
             "optional": {
                 "use_flash_attn": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Enable Flash Attention 2 for faster inference."
+                    "tooltip": "Enable Flash Attention 2 for faster inference. Automatically disabled for float32 precision (requires float16/bfloat16)."
                 }),
                 "allow_mask_overlap": ("BOOLEAN", {
                     "default": True,
@@ -213,6 +213,12 @@ class SeCModelLoader:
         if device == "cpu" and torch_dtype != torch.float32:
             print(f"⚠ CPU mode requires float32 precision. Overriding {torch_dtype} -> float32")
             torch_dtype = torch.float32
+
+        # Flash Attention requires float16/bfloat16 - auto-disable for float32
+        if torch_dtype == torch.float32 and use_flash_attn:
+            print("⚠ Flash Attention requires float16/bfloat16 precision. Disabling Flash Attention for float32.")
+            print("  Note: Inference will use standard attention (slower but compatible with float32)")
+            use_flash_attn = False
 
         hydra_overrides_extra = []
         overlap_value = "false" if allow_mask_overlap else "true"
@@ -386,11 +392,16 @@ class SeCVideoSegmentation:
                    "Provide visual prompts (points/bbox/mask) and SeC automatically understands the object concept for robust tracking.")
     
     def parse_points(self, points_str, image_shape=None):
-        """Parse point coordinates from JSON string and validate bounds"""
+        """Parse point coordinates from JSON string and validate bounds.
+
+        Returns:
+            tuple: (points_array, labels_array, validation_errors) where validation_errors
+                   is a list of error messages, or (None, None, errors) if all points invalid
+        """
         import json
 
         if not points_str or not points_str.strip():
-            return None, None
+            return None, None, []
 
         try:
             points_list = json.loads(points_str)
@@ -399,16 +410,22 @@ class SeCVideoSegmentation:
                 raise ValueError(f"Points must be a JSON array, got {type(points_list).__name__}")
 
             if len(points_list) == 0:
-                return None, None
+                return None, None, []
 
             points = []
+            validation_errors = []
+
             for i, point_dict in enumerate(points_list):
                 if not isinstance(point_dict, dict):
-                    print(f"Warning: Point {i} is not a dictionary, skipping")
+                    err = f"Point {i} is not a dictionary"
+                    print(f"Warning: {err}, skipping")
+                    validation_errors.append(err)
                     continue
 
                 if 'x' not in point_dict or 'y' not in point_dict:
-                    print(f"Warning: Point {i} missing 'x' or 'y' key, skipping")
+                    err = f"Point {i} missing 'x' or 'y' key"
+                    print(f"Warning: {err}, skipping")
+                    validation_errors.append(err)
                     continue
 
                 try:
@@ -417,32 +434,38 @@ class SeCVideoSegmentation:
 
                     # Validate coordinates are non-negative
                     if x < 0 or y < 0:
-                        print(f"Warning: Point {i} has negative coordinates ({x}, {y}), skipping")
+                        err = f"Point {i} has negative coordinates ({x}, {y})"
+                        print(f"Warning: {err}, skipping")
+                        validation_errors.append(err)
                         continue
 
                     # Validate within image bounds if provided
                     if image_shape is not None:
                         height, width = image_shape[1], image_shape[2]  # [batch, height, width, channels]
                         if x >= width or y >= height:
-                            print(f"Warning: Point {i} ({x}, {y}) outside image bounds ({width}x{height}), skipping")
+                            err = f"Point {i} ({x}, {y}) outside image bounds ({width}x{height})"
+                            print(f"Warning: {err}, skipping")
+                            validation_errors.append(err)
                             continue
 
                     points.append([x, y])
 
                 except (ValueError, TypeError) as e:
-                    print(f"Warning: Could not convert point {i} coordinates to float: {e}, skipping")
+                    err = f"Could not convert point {i} coordinates to float: {e}"
+                    print(f"Warning: {err}, skipping")
+                    validation_errors.append(err)
                     continue
 
             if not points:
-                return None, None
+                return None, None, validation_errors
 
-            return np.array(points, dtype=np.float32), np.ones(len(points), dtype=np.int32)
+            return np.array(points, dtype=np.float32), np.ones(len(points), dtype=np.int32), validation_errors
 
         except json.JSONDecodeError as e:
             raise ValueError(f"Invalid JSON in points: {str(e)}")
         except Exception as e:
             print(f"Error parsing points: {e}")
-            return None, None
+            return None, None, [str(e)]
     
     def parse_bbox(self, bbox_str):
         """Parse bounding box from string and validate"""
@@ -596,9 +619,16 @@ class SeCVideoSegmentation:
             model.grounding_encoder.reset_state(inference_state)
 
             # Parse inputs with bounds checking
-            pos_points, pos_labels = self.parse_points(positive_points, frames.shape)
-            neg_points, neg_labels = self.parse_points(negative_points, frames.shape)
+            pos_points, pos_labels, pos_errors = self.parse_points(positive_points, frames.shape)
+            neg_points, neg_labels, neg_errors = self.parse_points(negative_points, frames.shape)
             bbox_coords = self.parse_bbox(bbox)
+
+            # Collect validation errors for better error messages
+            all_validation_errors = []
+            if pos_errors:
+                all_validation_errors.extend([f"Positive {err}" for err in pos_errors])
+            if neg_errors:
+                all_validation_errors.extend([f"Negative {err}" for err in neg_errors])
 
             init_mask = None
 
@@ -670,7 +700,10 @@ class SeCVideoSegmentation:
 
             # Ensure at least one input was provided
             if init_mask is None:
-                raise ValueError("At least one visual prompt (points, bbox, or mask) must be provided")
+                error_msg = "At least one visual prompt (points, bbox, or mask) must be provided."
+                if all_validation_errors:
+                    error_msg += f" Point validation failures: {'; '.join(all_validation_errors)}"
+                raise ValueError(error_msg)
 
             if max_frames_to_track == -1:
                 max_frames_to_track = len(pil_images)

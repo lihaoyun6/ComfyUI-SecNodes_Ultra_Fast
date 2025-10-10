@@ -74,7 +74,7 @@ Load and configure the SeC model for inference. Automatically downloads SeC-4B m
 |-----------|------|---------|-------------|
 | **torch_dtype** | CHOICE | `bfloat16` | Precision: bfloat16 (recommended for GPU), float16, float32.<br>**Note:** CPU mode automatically uses float32 regardless of selection |
 | **device** | CHOICE | `auto` | Device selection (dynamically detects available GPUs):<br>• `auto`: gpu0 if available, else CPU (recommended)<br>• `cpu`: Force CPU (automatically uses float32)<br>• `gpu0`, `gpu1`, etc.: Specific GPU |
-| *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference |
+| *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference.<br>**Note:** Automatically disabled for float32 precision (requires float16/bfloat16) |
 | *allow_mask_overlap* | BOOLEAN | True | Allow objects to overlap (disable for strict separation) |
 
 **Outputs:** `model`
@@ -87,6 +87,7 @@ Load and configure the SeC model for inference. Automatically downloads SeC-4B m
   - 3+ GPU system: Shows all available GPUs
   - No GPU: Shows only `auto` and `cpu`
 - **CPU mode**: Automatically overrides to float32 precision to avoid dtype mismatch errors. CPU inference is significantly slower than GPU.
+- **Float32 precision**: Flash Attention is automatically disabled when using float32 (requires float16/bfloat16). Standard attention will be used instead (slower but compatible).
 - Dtype conversion hooks are automatically installed for GPU modes to ensure proper precision handling
 - Model is automatically unloaded from memory after workflow completes (relies on Python garbage collection)
 
