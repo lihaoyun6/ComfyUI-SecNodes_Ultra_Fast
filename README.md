@@ -22,9 +22,9 @@ The result? SeC tracks objects more reliably through challenging scenarios like 
 
 ## Demo
 
-https://github.com/9nate-drake/Comfyui-SecNodes/raw/main/examples/visualize_00002.mp4
+https://github.com/user-attachments/assets/5cc6677e-4a9d-4e55-801d-b92305a37725
 
-*Example: SeC tracking an object through a complex scene with occlusions and appearance changes*
+*Example: SeC tracking an object through scene changes and dynamic movement*
 
 ## Features
 
