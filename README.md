@@ -20,6 +20,12 @@
 
 The result? SeC tracks objects more reliably through challenging scenarios like rapid appearance changes, occlusions, and complex multi-object scenes.
 
+## Demo
+
+https://github.com/9nate-drake/Comfyui-SecNodes/raw/main/examples/visualize_00002.mp4
+
+*Example: SeC tracking an object through a complex scene with occlusions and appearance changes*
+
 ## Features
 
 - **SeC Model Loader**: Load SeC models with simple settings
