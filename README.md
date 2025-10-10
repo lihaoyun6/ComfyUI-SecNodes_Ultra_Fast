@@ -181,48 +181,6 @@ Visualize coordinate points on images for debugging.
 
 **Outputs:** `image` (IMAGE)
 
-## Quick Start Examples
-
-### Basic Workflow
-```
-1. SeC Model Loader (default settings)
-   └─→ model
-
-2. Load Video Frames
-   └─→ frames
-
-3. SeC Video Segmentation
-   ├─ model: from (1)
-   ├─ frames: from (2)
-   └─ positive_points: '[{"x": 200, "y": 300}]'
-
-   └─→ masks (ready for VideoCombine, etc.)
-```
-
-### With Coordinate Visualization
-```
-1. Load Image (first frame)
-   └─→ image
-
-2. Coordinate Plotter
-   ├─ coordinates: '[{"x": 200, "y": 300}]'
-   ├─ image: from (1)
-   └─ point_color: "#FF0000"
-
-   └─→ Preview image (verify point placement)
-
-3. Use same coordinates in SeC Video Segmentation
-```
-
-### Bidirectional Tracking (Best for Complex Videos)
-```
-SeC Video Segmentation:
-  └─ annotation_frame_idx: 25  (clear frame in middle)
-  └─ tracking_direction: bidirectional
-  └─ positive_points: '[{"x": 300, "y": 200}]'
-
-Result: Tracks from frame 25 → forward to end AND backward to start
-```
 
 ## Tracking Directions
 
