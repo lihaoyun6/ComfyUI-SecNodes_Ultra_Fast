@@ -26,6 +26,12 @@ https://github.com/user-attachments/assets/5cc6677e-4a9d-4e55-801d-b92305a37725
 
 *Example: SeC tracking an object through scene changes and dynamic movement*
 
+
+
+https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
+
+*Example: SAM fails to track correct dog*
+
 ## Features
 
 - **SeC Model Loader**: Load SeC models with simple settings
