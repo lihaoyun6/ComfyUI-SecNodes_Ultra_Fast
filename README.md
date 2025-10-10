@@ -108,7 +108,7 @@ Segment and track objects across video frames.
 | *annotation_frame_idx* | INT | 0 | Frame where prompt is applied |
 | *object_id* | INT | 1 | Unique ID for multi-object tracking |
 | *max_frames_to_track* | INT | -1 | Max frames (-1 = all) |
-| *mllm_memory_size* | INT | 20 | Number of keyframes stored for semantic understanding (affects compute on scene changes, not VRAM) |
+| *mllm_memory_size* | INT | 12 | Number of keyframes for semantic understanding (affects compute on scene changes, not VRAM). Original paper used 7. |
 | *offload_video_to_cpu* | BOOLEAN | False | Offload video frames to CPU (saves significant GPU memory, ~3% slower) |
 
 **Outputs:** `masks` (MASK), `object_ids` (INT)
@@ -256,7 +256,7 @@ Based on extensive testing, here are recommended configurations for different GP
 - **Settings**:
   - `offload_video_to_cpu: False` (better performance)
   - `torch_dtype: bfloat16`
-  - `mllm_memory_size: 20` (default - maximum quality)
+  - `mllm_memory_size: 12` (default - balanced quality/speed)
 - **Expected Performance**: 5-6 it/s
 - **Note**: Can handle 200 frames at 512x384 using ~13.5GB VRAM
 
@@ -267,7 +267,7 @@ Based on extensive testing, here are recommended configurations for different GP
 - **Settings**:
   - `offload_video_to_cpu: False`
   - `torch_dtype: bfloat16`
-  - `mllm_memory_size: 20` (maximum semantic context)
+  - `mllm_memory_size: 12-15` (balanced, can increase to 20 for complex scenes)
 - **Expected Performance**: 4-6 it/s
 - **Note**: 500 frames at 512x384 uses ~17GB VRAM
 
@@ -278,7 +278,7 @@ Based on extensive testing, here are recommended configurations for different GP
 - **Settings**:
   - `offload_video_to_cpu: False`
   - `torch_dtype: bfloat16`
-  - `mllm_memory_size: 20`
+  - `mllm_memory_size: 15-20` (maximum semantic context for complex professional videos)
 - **Expected Performance**: 4-5 it/s for 4K
 - **Note**: 4K videos (30 frames) use ~11.5GB VRAM with plenty of headroom
 
@@ -286,13 +286,18 @@ Based on extensive testing, here are recommended configurations for different GP
 
 The `mllm_memory_size` parameter controls how many historical keyframes SeC's Large Vision-Language Model uses for semantic understanding:
 
-- **What it does**: Stores frame references for the LVLM to analyze when scene changes occur
+- **What it does**: Stores frame references (first frame + last N-1 frames) for the LVLM to analyze when scene changes occur
 - **VRAM impact**: None - testing shows values 3-20 use similar VRAM (~11-13GB for typical videos)
 - **Compute impact**: Higher values mean more frames processed through the vision encoder on scene changes
-- **Quality trade-off**: More keyframes = better object concept understanding in complex scenes
-- **Recommended**: Keep at 20 (default) for best quality. Only reduce if targeting very low-end GPUs (8GB or less)
+- **Quality trade-off**: More keyframes = better object concept understanding in complex scenes, but diminishing returns after ~10-12 frames
+- **Original research**: SeC paper used 7 and achieved SOTA performance (+11.8 over SAM 2.1), emphasizing "quality over quantity" of keyframes
 
-**Why doesn't it affect VRAM?** The parameter stores lightweight frame indices and mask arrays, not full frame tensors. When scene changes occur, frames are loaded from disk on-demand for LVLM processing.
+**Recommended Values:**
+- **Default (12)**: Balanced approach - higher than paper's 7 for extra context, but not excessive
+- **Low (5-7)**: Faster inference on simple videos, matches original research setup
+- **High (15-20)**: Maximum semantic context for very complex videos (no VRAM penalty)
+
+**Why doesn't it affect VRAM?** The parameter stores lightweight frame indices and mask arrays, not full frame tensors. When scene changes occur, frames are loaded from disk on-demand for LVLM processing. The underlying SAM2 architecture supports up to 22 frames.
 
 ## Attribution
 
