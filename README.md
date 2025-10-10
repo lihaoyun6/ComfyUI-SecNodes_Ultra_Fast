@@ -108,7 +108,7 @@ Segment and track objects across video frames.
 | *annotation_frame_idx* | INT | 0 | Frame where prompt is applied |
 | *object_id* | INT | 1 | Unique ID for multi-object tracking |
 | *max_frames_to_track* | INT | -1 | Max frames (-1 = all) |
-| *mllm_memory_size* | INT | 5 | Semantic memory size (lower = less memory) |
+| *mllm_memory_size* | INT | 20 | Number of keyframes stored for semantic understanding (affects compute on scene changes, not VRAM) |
 | *offload_video_to_cpu* | BOOLEAN | False | Offload video frames to CPU (saves significant GPU memory, ~3% slower) |
 
 **Outputs:** `masks` (MASK), `object_ids` (INT)
@@ -227,14 +227,72 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 - **Python**: 3.10-3.12
 - **PyTorch**: Included with ComfyUI
 - **CUDA GPU**: Recommended (CPU supported but significantly slower)
-- **VRAM**: ~12-16GB for SeC-4B model with bfloat16
+- **VRAM**: See GPU VRAM recommendations below
   - Can reduce significantly by enabling `offload_video_to_cpu` (~3% speed penalty)
-  - Lower `mllm_memory_size` (default: 5) for additional memory savings
 
 **Note on CPU Mode:**
 - CPU inference automatically uses float32 precision (bfloat16/float16 not supported on CPU)
 - Expect significantly slower performance compared to GPU (~10-20x slower depending on hardware)
 - Not recommended for production use, mainly for testing or systems without GPUs
+
+## GPU VRAM Recommendations
+
+Based on extensive testing, here are recommended configurations for different GPU VRAM tiers:
+
+### 8-10GB VRAM
+**Ideal for:** Short clips, lower resolutions
+- **Resolution**: 256x256 to 512x384
+- **Frame Count**: Up to 50 frames
+- **Settings**:
+  - `offload_video_to_cpu: True` (saves 2-3GB VRAM)
+  - `torch_dtype: bfloat16`
+  - `mllm_memory_size: 5-10` (optional further optimization)
+- **Expected Performance**: 6-10 it/s
+
+### 12-14GB VRAM
+**Ideal for:** Standard videos, medium duration
+- **Resolution**: 512x384 to 720p
+- **Frame Count**: 100-200 frames
+- **Settings**:
+  - `offload_video_to_cpu: False` (better performance)
+  - `torch_dtype: bfloat16`
+  - `mllm_memory_size: 20` (default - maximum quality)
+- **Expected Performance**: 5-6 it/s
+- **Note**: Can handle 200 frames at 512x384 using ~13.5GB VRAM
+
+### 16-20GB VRAM
+**Ideal for:** HD videos, longer clips
+- **Resolution**: 720p to 1080p
+- **Frame Count**: 200-500 frames
+- **Settings**:
+  - `offload_video_to_cpu: False`
+  - `torch_dtype: bfloat16`
+  - `mllm_memory_size: 20` (maximum semantic context)
+- **Expected Performance**: 4-6 it/s
+- **Note**: 500 frames at 512x384 uses ~17GB VRAM
+
+### 24GB+ VRAM
+**Ideal for:** 4K video, professional workflows
+- **Resolution**: 1080p to 4K
+- **Frame Count**: 500+ frames
+- **Settings**:
+  - `offload_video_to_cpu: False`
+  - `torch_dtype: bfloat16`
+  - `mllm_memory_size: 20`
+- **Expected Performance**: 4-5 it/s for 4K
+- **Note**: 4K videos (30 frames) use ~11.5GB VRAM with plenty of headroom
+
+### Understanding mllm_memory_size
+
+The `mllm_memory_size` parameter controls how many historical keyframes SeC's Large Vision-Language Model uses for semantic understanding:
+
+- **What it does**: Stores frame references for the LVLM to analyze when scene changes occur
+- **VRAM impact**: None - testing shows values 3-20 use identical VRAM (~11-13GB for typical videos)
+- **Compute impact**: Higher values mean more frames processed through the vision encoder on scene changes
+- **Quality trade-off**: More keyframes = better object concept understanding in complex scenes
+- **Recommended**: Keep at 20 (default) for best quality. Only reduce if targeting very low-end GPUs (8GB or less)
+
+**Why doesn't it affect VRAM?** The parameter stores lightweight frame indices and mask arrays, not full frame tensors. When scene changes occur, frames are loaded from disk on-demand for LVLM processing.
 
 ## Attribution
 
@@ -255,10 +313,10 @@ This node implements the **SeC-4B** model developed by OpenIXCLab.
 - Check console for download progress and any error messages
 
 **CUDA out of memory**:
-- Enable `offload_video_to_cpu` (significant VRAM savings, only ~3% slower)
-- Reduce `mllm_memory_size` from 5 to 3
+- Enable `offload_video_to_cpu` (saves 2-3GB VRAM, only ~3% slower)
 - Try `float16` precision instead of `bfloat16`
-- Process fewer frames at once
+- Process fewer frames at once (split video into smaller batches)
+- See GPU VRAM recommendations above for your hardware tier
 
 **Slow inference**:
 - Enable `use_flash_attn` in model loader (requires Flash Attention 2)
@@ -266,8 +324,6 @@ This node implements the **SeC-4B** model developed by OpenIXCLab.
 - Use `bfloat16` precision (default)
 
 **Empty masks**: Provide clearer visual prompts or try different frame
-
-**High memory usage**: Reduce `mllm_memory_size` (default 12, try 5) - trades some quality for memory
 
 ---
 

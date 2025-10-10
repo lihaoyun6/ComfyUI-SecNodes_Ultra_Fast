@@ -371,10 +371,10 @@ class SeCVideoSegmentation:
                     "tooltip": "Advanced: Max frames to process (-1 for all)"
                 }),
                 "mllm_memory_size": ("INT", {
-                    "default": 12,
+                    "default": 20,
                     "min": 1,
                     "max": 20,
-                    "tooltip": "Advanced: Frames in multimodal memory. Lower values use less memory."
+                    "tooltip": "Advanced: Number of keyframes stored for semantic understanding (does not affect VRAM, only compute on scene changes)."
                 }),
                 "offload_video_to_cpu": ("BOOLEAN", {
                     "default": False,
@@ -560,7 +560,7 @@ class SeCVideoSegmentation:
     
     def segment_video(self, model, frames, positive_points="", negative_points="",
                      bbox="", input_mask=None, tracking_direction="forward",
-                     annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=12,
+                     annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=20,
                      offload_video_to_cpu=False):
         """Perform video object segmentation"""
 
