@@ -2,7 +2,6 @@
 # All SeC inference code is bundled, only pip dependencies needed
 
 # Core ML dependencies
-transformers>=4.37.0
 huggingface_hub>=0.20.0
 peft>=0.10.0
 timm>=0.9.0
@@ -17,11 +16,10 @@ hydra-core>=1.3.0
 omegaconf>=2.1.0
 ninja>=1.11.0
 iopath
-tqdm
 
 # Standard libraries (likely already installed with ComfyUI)
-numpy>=1.21.0
 packaging>=21.0
 
 # PyTorch (likely already installed with ComfyUI)
-# If needed: torch>=2.3.0 torchvision>=0.18.0
+# Uncomment if needed: 
+# torch>=2.3.0 torchvision>=0.18.0

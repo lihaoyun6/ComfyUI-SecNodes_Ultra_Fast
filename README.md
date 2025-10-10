@@ -224,8 +224,10 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 
 ## Requirements
 
-- **Python**: 3.10-3.12
-- **PyTorch**: Included with ComfyUI
+- **Python**: 3.10-3.12 (3.12 recommended)
+  - Python 3.13: Not recommended - experimental support with known dependency installation issues
+- **PyTorch**: 2.6.0+ (included with ComfyUI)
+- **CUDA**: 11.8+ for GPU acceleration
 - **CUDA GPU**: Recommended (CPU supported but significantly slower)
 - **VRAM**: See GPU VRAM recommendations below
   - Can reduce significantly by enabling `offload_video_to_cpu` (~3% speed penalty)
@@ -235,53 +237,27 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 - Expect significantly slower performance compared to GPU (~10-20x slower depending on hardware)
 - Not recommended for production use, mainly for testing or systems without GPUs
 
+**Flash Attention 2 (Optional):**
+- Provides ~2x speedup but requires specific hardware
+- **GPU Requirements**: Ampere/Ada/Hopper architecture only (RTX 30/40 series, A100, H100)
+  - Does NOT work on RTX 20 series (Turing) or older GPUs
+- **CUDA**: 12.0+ required
+- **Windows + Python 3.12**: Use pre-compiled wheels or disable flash attention
+- The node automatically falls back to standard attention if Flash Attention is unavailable
+
 ## GPU VRAM Recommendations
 
-Based on extensive testing, here are recommended configurations for different GPU VRAM tiers:
+| VRAM | Resolution | Frames | Key Settings | Performance |
+|------|-----------|--------|--------------|-------------|
+| **8-10GB** | 256x256 - 512x384 | Up to 50 | `offload_video_to_cpu: True`<br>`mllm_memory_size: 5-10` | 6-10 it/s |
+| **12-14GB** | 512x384 - 720p | 100-200 | Default settings work well<br>Can handle 200 frames @ 512x384 (~13.5GB) | 5-6 it/s |
+| **16-20GB** | 720p - 1080p | 200-500 | `mllm_memory_size: 12-15`<br>500 frames @ 512x384 uses ~17GB | 4-6 it/s |
+| **24GB+** | 1080p - 4K | 500+ | `mllm_memory_size: 15-20` for max quality<br>4K (30 frames) uses ~11.5GB | 4-5 it/s |
 
-### 8-10GB VRAM
-**Ideal for:** Short clips, lower resolutions
-- **Resolution**: 256x256 to 512x384
-- **Frame Count**: Up to 50 frames
-- **Settings**:
-  - `offload_video_to_cpu: True` (saves 2-3GB VRAM)
-  - `torch_dtype: bfloat16`
-  - `mllm_memory_size: 5-10` (optional further optimization)
-- **Expected Performance**: 6-10 it/s
-
-### 12-14GB VRAM
-**Ideal for:** Standard videos, medium duration
-- **Resolution**: 512x384 to 720p
-- **Frame Count**: 100-200 frames
-- **Settings**:
-  - `offload_video_to_cpu: False` (better performance)
-  - `torch_dtype: bfloat16`
-  - `mllm_memory_size: 12` (default - balanced quality/speed)
-- **Expected Performance**: 5-6 it/s
-- **Note**: Can handle 200 frames at 512x384 using ~13.5GB VRAM
-
-### 16-20GB VRAM
-**Ideal for:** HD videos, longer clips
-- **Resolution**: 720p to 1080p
-- **Frame Count**: 200-500 frames
-- **Settings**:
-  - `offload_video_to_cpu: False`
-  - `torch_dtype: bfloat16`
-  - `mllm_memory_size: 12-15` (balanced, can increase to 20 for complex scenes)
-- **Expected Performance**: 4-6 it/s
-- **Note**: 500 frames at 512x384 uses ~17GB VRAM
-
-### 24GB+ VRAM
-**Ideal for:** 4K video, professional workflows
-- **Resolution**: 1080p to 4K
-- **Frame Count**: 500+ frames
-- **Settings**:
-  - `offload_video_to_cpu: False`
-  - `torch_dtype: bfloat16`
-  - `mllm_memory_size: 15-20` (maximum semantic context for complex professional videos)
-- **Expected Performance**: 4-5 it/s for 4K
-- **Note**: 4K videos (30 frames) use ~11.5GB VRAM with plenty of headroom
-
+**Quick Tips:**
+- Low on VRAM? Enable `offload_video_to_cpu` (saves 2-3GB, only ~3% slower)
+- Use `torch_dtype: bfloat16` for best balance of speed and quality
+- Lower `mllm_memory_size` (5-10) if you need to squeeze into limited VRAM
 ### Understanding mllm_memory_size
 
 The `mllm_memory_size` parameter controls how many historical keyframes SeC's Large Vision-Language Model uses for semantic understanding:
