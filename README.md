@@ -58,7 +58,7 @@ cd *install_location*/ComfyUI/custom_nodes/Comfyui-SecNodes
 
 **If using standard Python installation:**
 ```bash
-cd ComfyUI/custom_nodes/Comfyui-SecNodes
+cd *install_location*/ComfyUI/custom_nodes/Comfyui-SecNodes
 pip install -r requirements.txt
 ```
 
