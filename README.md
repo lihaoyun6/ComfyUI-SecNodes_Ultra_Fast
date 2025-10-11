@@ -130,6 +130,7 @@ Segment and track objects across video frames.
 | *max_frames_to_track* | INT | -1 | Max frames (-1 = all) |
 | *mllm_memory_size* | INT | 12 | Number of keyframes for semantic understanding (affects compute on scene changes, not VRAM). Original paper used 7. |
 | *offload_video_to_cpu* | BOOLEAN | False | Offload video frames to CPU (saves significant GPU memory, ~3% slower) |
+| *auto_unload_model* | BOOLEAN | True | Unload the model from VRAM and RAM after segmentation. Set false if doing multiple segmentations in succession. |
 
 **Outputs:** `masks` (MASK), `object_ids` (INT)
 
