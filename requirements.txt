@@ -10,6 +10,7 @@ timm>=0.9.0
 pillow>=8.0.0
 opencv-python-headless>=4.5.0
 scikit-image
+scipy>=1.7.0
 
 # Configuration and utilities
 hydra-core>=1.3.0

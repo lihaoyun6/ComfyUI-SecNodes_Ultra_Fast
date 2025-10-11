@@ -1,6 +1,8 @@
-# Custom
+# development
 DEVELOPMENT_CONTEXT.md
 TESTING.md
+.sec/
+.claude/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
