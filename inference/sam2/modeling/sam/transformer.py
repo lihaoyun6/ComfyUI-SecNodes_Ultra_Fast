@@ -18,6 +18,13 @@ from ..position_encoding import apply_rotary_enc, compute_axial_cis
 from ..sam2_utils import MLP
 from ...utils.misc import get_sdpa_settings
 
+# Suppress PyTorch SDPA warnings about memory efficient/flash attention kernels
+warnings.filterwarnings("ignore", message=".*efficient kernel not used.*")
+warnings.filterwarnings("ignore", message=".*Flash attention kernel.*")
+warnings.filterwarnings("ignore", message=".*CuDNN attention kernel.*")
+warnings.filterwarnings("ignore", message=".*Torch was not compiled with flash attention.*")
+warnings.filterwarnings("ignore", message=".*head_dim should be no more than.*")
+warnings.filterwarnings("ignore", message=".*Memory Efficient attention has been runtime disabled.*")
 warnings.simplefilter(action="ignore", category=FutureWarning)
 # Check whether Flash Attention is available (and use it by default)
 OLD_GPU, USE_FLASH_ATTN, MATH_KERNEL_ON = get_sdpa_settings()
