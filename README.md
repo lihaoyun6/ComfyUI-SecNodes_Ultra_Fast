@@ -109,7 +109,6 @@ Load and configure the SeC model for inference. Automatically downloads SeC-4B m
 - **CPU mode**: Automatically overrides to float32 precision to avoid dtype mismatch errors. CPU inference is significantly slower than GPU.
 - **Float32 precision**: Flash Attention is automatically disabled when using float32 (requires float16/bfloat16). Standard attention will be used instead (slower but compatible).
 - Dtype conversion hooks are automatically installed for GPU modes to ensure proper precision handling
-- Model is automatically unloaded from memory after workflow completes (relies on Python garbage collection)
 
 ---
 
