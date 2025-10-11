@@ -387,6 +387,10 @@ class SeCVideoSegmentation:
                 "offload_video_to_cpu": ("BOOLEAN", {
                     "default": False,
                     "tooltip": "Memory: Offload video frames to CPU (saves significant GPU memory, ~3% slower)"
+                }),
+                "auto_unload_model": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Memory: Automatically move model to CPU after segmentation to free GPU memory (recommended for workflows with multiple heavy models)"
                 })
             }
         }
@@ -565,11 +569,48 @@ class SeCVideoSegmentation:
             frame_paths.append(frame_path)
 
         return temp_dir, frame_paths
-    
+
+    def _cleanup_model_memory(self, model):
+        """
+        Explicitly clean up model memory after segmentation.
+        Moves model to CPU and clears GPU caches to free VRAM.
+        """
+        try:
+            original_device = None
+            if hasattr(model, 'device'):
+                original_device = model.device
+
+            # Move model to CPU to free GPU memory
+            print("Moving SeC model to CPU to free GPU memory...")
+            model.cpu()
+
+            # Clear any model-specific caches
+            if hasattr(model, 'grounding_encoder'):
+                # Clear SAM2 inference states if they exist
+                try:
+                    if hasattr(model.grounding_encoder, '_states'):
+                        model.grounding_encoder._states.clear()
+                except:
+                    pass
+
+            # Clear PyTorch GPU caches
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+
+            import gc
+            gc.collect()
+
+            if original_device and str(original_device).startswith('cuda'):
+                print(f"✓ Model moved from {original_device} to CPU, GPU memory freed")
+
+        except Exception as e:
+            print(f"Warning: Model cleanup encountered an issue: {e}")
+            # Don't raise - cleanup failures shouldn't break the workflow
+
     def segment_video(self, model, frames, positive_points="", negative_points="",
                      bbox="", input_mask=None, tracking_direction="forward",
                      annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=12,
-                     offload_video_to_cpu=False):
+                     offload_video_to_cpu=False, auto_unload_model=True):
         """Perform video object segmentation"""
 
         # === Input Validation ===
@@ -842,9 +883,14 @@ class SeCVideoSegmentation:
                 except Exception as e:
                     print(f"Warning: Failed to clean up temp directory {video_dir}: {e}")
 
-            # Clear GPU cache if available
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
+            # Model cleanup - move to CPU if requested
+            if auto_unload_model:
+                self._cleanup_model_memory(model)
+            else:
+                # Still clear GPU cache even if keeping model loaded
+                if torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+
             gc.collect()
 
 
