@@ -318,6 +318,17 @@ class SeCModelLoader:
 
             print(f"SeC model loaded successfully on {device}")
 
+            # Store loading metadata for potential auto-reload
+            model._sec_loading_metadata = {
+                'model_path': model_path,
+                'torch_dtype': torch_dtype,
+                'device': device,
+                'use_flash_attn': use_flash_attn,
+                'allow_mask_overlap': allow_mask_overlap,
+                'config': config,
+                'hydra_overrides_extra': hydra_overrides_extra
+            }
+
             return (model,)
 
         except Exception as e:
@@ -390,7 +401,7 @@ class SeCVideoSegmentation:
                 }),
                 "auto_unload_model": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Memory: Automatically move model to CPU after segmentation to free GPU memory (recommended for workflows with multiple heavy models)"
+                    "tooltip": "Memory: Automatically unload model from memory after segmentation to free GPU and RAM. Model will auto-reload if needed for subsequent runs (transparent to user)."
                 })
             }
         }
@@ -572,46 +583,205 @@ class SeCVideoSegmentation:
 
     def _cleanup_model_memory(self, model):
         """
-        Explicitly clean up model memory after segmentation.
-        Moves model to CPU and clears GPU caches to free VRAM.
+        Completely unload model from memory while preserving loading metadata for auto-reload.
+        Frees all GPU and RAM memory by deleting model components entirely.
         """
         try:
             original_device = None
             if hasattr(model, 'device'):
                 original_device = model.device
 
-            # Move model to CPU to free GPU memory
-            print("Moving SeC model to CPU to free GPU memory...")
-            model.cpu()
+            print("Unloading SeC model from memory...")
 
-            # Clear any model-specific caches
+            # Preserve loading metadata before cleanup
+            loading_metadata = getattr(model, '_sec_loading_metadata', None)
+
+            if loading_metadata is None:
+                print("  Warning: No loading metadata found - auto-reload will not be available")
+
+            # Step 1: Clear SAM2 inference states first
             if hasattr(model, 'grounding_encoder'):
-                # Clear SAM2 inference states if they exist
                 try:
                     if hasattr(model.grounding_encoder, '_states'):
                         model.grounding_encoder._states.clear()
+                        print("  ✓ Cleared SAM2 inference states")
                 except:
                     pass
 
-            # Clear PyTorch GPU caches
+            # Step 2: Delete all model components to free memory
+            components_deleted = []
+
+            for component in ['vision_encoder', 'language_model', 'grounding_encoder', 'tokenizer']:
+                if hasattr(model, component):
+                    delattr(model, component)
+                    components_deleted.append(component)
+
+            # Step 3: Delete any other heavy attributes
+            for attr_name in ['vision_config', 'llm_config', 'llm', 'vision_model', 'config']:
+                if hasattr(model, attr_name) and not attr_name.startswith('_sec_'):
+                    try:
+                        delattr(model, attr_name)
+                        components_deleted.append(attr_name)
+                    except:
+                        pass
+
+            # Step 4: Clear PyTorch caches
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
             import gc
             gc.collect()
 
+            # Step 5: Restore metadata and mark as unloaded
+            if loading_metadata:
+                model._sec_loading_metadata = loading_metadata
+            model._sec_unloaded = True
+
             if original_device and str(original_device).startswith('cuda'):
-                print(f"✓ Model moved from {original_device} to CPU, GPU memory freed")
+                print(f"✓ Model completely unloaded from {original_device} (GPU and RAM freed)")
+            else:
+                print(f"✓ Model completely unloaded from memory (RAM freed)")
+
+            if components_deleted:
+                print(f"  Deleted components: {', '.join(components_deleted)}")
 
         except Exception as e:
             print(f"Warning: Model cleanup encountered an issue: {e}")
             # Don't raise - cleanup failures shouldn't break the workflow
+
+    def _reload_model(self, model):
+        """
+        Reload model components using stored metadata.
+        Returns True if successful, False if metadata is missing.
+        """
+        try:
+            if not hasattr(model, '_sec_loading_metadata'):
+                return False
+
+            metadata = model._sec_loading_metadata
+            print("Reloading SeC model from stored metadata...")
+
+            # Recreate the model using the same logic as SeCModelLoader
+            config = metadata['config']
+            torch_dtype = metadata['torch_dtype']
+            device = metadata['device']
+            use_flash_attn = metadata['use_flash_attn']
+            model_path = metadata['model_path']
+
+            # Set up loading kwargs
+            load_kwargs = {
+                "config": config,
+                "torch_dtype": torch_dtype,
+                "use_flash_attn": use_flash_attn,
+            }
+
+            if device.startswith("cuda:"):
+                import gc
+                gc.collect()
+                torch.cuda.empty_cache()
+                load_kwargs["device_map"] = {"": device}
+                load_kwargs["low_cpu_mem_usage"] = True
+            else:
+                load_kwargs["low_cpu_mem_usage"] = True
+
+            # Load the model fresh
+            from .inference.modeling_sec import SeCModel
+            from transformers import AutoTokenizer
+
+            fresh_model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
+
+            # Convert to target device and dtype
+            if device.startswith("cuda") and torch_dtype != torch.float32:
+                fresh_model = fresh_model.to(dtype=torch_dtype)
+            else:
+                fresh_model = fresh_model.to(device=device, dtype=torch_dtype)
+
+            # Set up tokenizer
+            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            fresh_model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
+
+            # Reinstall dtype conversion hooks if needed
+            if device.startswith("cuda") and torch_dtype != torch.float32:
+                def dtype_conversion_hook(module, args, kwargs):
+                    try:
+                        module_dtype = None
+                        for param in module.parameters():
+                            module_dtype = param.dtype
+                            break
+
+                        if module_dtype is None:
+                            return args, kwargs
+
+                        if isinstance(module, torch.nn.Embedding):
+                            return args, kwargs
+
+                        new_args = []
+                        for arg in args:
+                            if isinstance(arg, torch.Tensor):
+                                if arg.dtype in [torch.long, torch.int, torch.int32, torch.int64]:
+                                    new_args.append(arg)
+                                elif arg.dtype != module_dtype:
+                                    new_args.append(arg.to(dtype=module_dtype))
+                                else:
+                                    new_args.append(arg)
+                            else:
+                                new_args.append(arg)
+
+                        new_kwargs = {}
+                        for k, v in kwargs.items():
+                            if isinstance(v, torch.Tensor):
+                                if v.dtype in [torch.long, torch.int, torch.int32, torch.int64]:
+                                    new_kwargs[k] = v
+                                elif v.dtype != module_dtype:
+                                    new_kwargs[k] = v.to(dtype=module_dtype)
+                                else:
+                                    new_kwargs[k] = v
+                            else:
+                                new_kwargs[k] = v
+
+                        return tuple(new_args), new_kwargs
+                    except Exception:
+                        return args, kwargs
+
+                for module in fresh_model.modules():
+                    if len(list(module.parameters(recurse=False))) > 0:
+                        module.register_forward_pre_hook(dtype_conversion_hook, with_kwargs=True)
+
+            # Copy all attributes from fresh model to original model
+            for attr_name in dir(fresh_model):
+                if not attr_name.startswith('_sec_') and not attr_name.startswith('__'):
+                    try:
+                        setattr(model, attr_name, getattr(fresh_model, attr_name))
+                    except:
+                        pass
+
+            # Restore metadata and clear unloaded flag
+            model._sec_loading_metadata = metadata
+            model._sec_unloaded = False
+
+            print(f"✓ Model reloaded successfully on {device}")
+            return True
+
+        except Exception as e:
+            print(f"Failed to reload model: {e}")
+            return False
 
     def segment_video(self, model, frames, positive_points="", negative_points="",
                      bbox="", input_mask=None, tracking_direction="forward",
                      annotation_frame_idx=0, object_id=1, max_frames_to_track=-1, mllm_memory_size=12,
                      offload_video_to_cpu=False, auto_unload_model=True):
         """Perform video object segmentation"""
+
+        # === Model State Validation and Auto-Reload ===
+        # Check if model has been unloaded and reload if necessary
+        if hasattr(model, '_sec_unloaded') and model._sec_unloaded:
+            print("Detected unloaded model, attempting auto-reload...")
+            if not self._reload_model(model):
+                raise RuntimeError(
+                    "Model has been unloaded and auto-reload failed. "
+                    "This may happen if the model was loaded with an older version. "
+                    "Please use a fresh Model Loader node."
+                )
 
         # === Input Validation ===
         # Validate frames tensor
