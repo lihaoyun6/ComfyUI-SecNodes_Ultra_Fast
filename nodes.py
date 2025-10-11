@@ -260,8 +260,16 @@ class SeCModelLoader:
             tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
             model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
 
+            # Check Flash Attention availability
+            if use_flash_attn and device.startswith("cuda"):
+                try:
+                    from .inference.flash_attention import FlashAttention
+                    print("Using Flash Attention 2")
+                except (ImportError, ModuleNotFoundError):
+                    print("Flash Attention not installed - using standard attention")
+
             if device.startswith("cuda") and torch_dtype != torch.float32:
-                print(f"Installing dtype conversion hooks...")
+                #print(f"Installing dtype conversion hooks...")
 
                 def dtype_conversion_hook(module, args, kwargs):
                     try:
