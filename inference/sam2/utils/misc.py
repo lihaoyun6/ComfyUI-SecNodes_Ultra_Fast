@@ -44,6 +44,61 @@ def get_sdpa_settings():
     return old_gpu, use_flash_attn, math_kernel_on
 
 
+def _get_connected_components_python(mask):
+    """
+    Pure Python fallback implementation of connected components using scipy.
+    This provides 8-connectivity labeling when the compiled CUDA extension is unavailable.
+
+    Inputs:
+    - mask: A binary mask tensor of shape (N, 1, H, W)
+
+    Outputs:
+    - labels: A tensor of shape (N, 1, H, W) containing connected component labels
+    - counts: A tensor of shape (N, 1, H, W) containing areas of connected components
+    """
+    try:
+        from scipy import ndimage
+    except ImportError:
+        raise ImportError(
+            "scipy is required for connected components fallback when SAM2 CUDA extension is not available. "
+            "Install it with: pip install scipy"
+        )
+
+    device = mask.device
+    N, C, H, W = mask.shape
+
+    # Convert to numpy for scipy processing
+    mask_np = mask.cpu().numpy().astype(np.uint8)
+    labels_np = np.zeros_like(mask_np, dtype=np.int32)
+    counts_np = np.zeros_like(mask_np, dtype=np.int32)
+
+    # 8-connectivity structure (includes diagonal neighbors)
+    structure = ndimage.generate_binary_structure(2, 2)
+
+    for i in range(N):
+        for c in range(C):
+            # Label connected components with 8-connectivity
+            labeled, num_features = ndimage.label(mask_np[i, c], structure=structure)
+            labels_np[i, c] = labeled
+
+            # Count pixels in each component
+            if num_features > 0:
+                component_sizes = ndimage.sum(
+                    mask_np[i, c],
+                    labeled,
+                    index=range(1, num_features + 1)
+                )
+                # Map each labeled pixel to its component size
+                for label_idx, size in enumerate(component_sizes, start=1):
+                    counts_np[i, c][labeled == label_idx] = int(size)
+
+    # Convert back to tensors on original device
+    labels = torch.from_numpy(labels_np).to(device=device, dtype=torch.int32)
+    counts = torch.from_numpy(counts_np).to(device=device, dtype=torch.int32)
+
+    return labels, counts
+
+
 def get_connected_components(mask):
     """
     Get the connected components (8-connectivity) of binary masks of shape (N, 1, H, W).
@@ -58,9 +113,13 @@ def get_connected_components(mask):
     - counts: A tensor of shape (N, 1, H, W) containing the area of the connected
               components for foreground pixels and 0 for background pixels.
     """
-    from sam2 import _C
-
-    return _C.get_connected_componnets(mask.to(torch.uint8).contiguous())
+    # Try to use the compiled CUDA extension if available (faster)
+    try:
+        from sam2 import _C
+        return _C.get_connected_componnets(mask.to(torch.uint8).contiguous())
+    except (ImportError, ModuleNotFoundError):
+        # Fall back to scipy implementation (slower but functional)
+        return _get_connected_components_python(mask)
 
 
 def mask_to_box(masks: torch.Tensor):
