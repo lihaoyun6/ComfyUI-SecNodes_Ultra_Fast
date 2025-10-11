@@ -611,19 +611,38 @@ class SeCVideoSegmentation:
             # Step 2: Delete all model components to free memory
             components_deleted = []
 
-            for component in ['vision_encoder', 'language_model', 'grounding_encoder', 'tokenizer']:
+            # Main components that take the most memory
+            main_components = ['vision_encoder', 'language_model', 'grounding_encoder', 'tokenizer']
+            for component in main_components:
                 if hasattr(model, component):
-                    delattr(model, component)
-                    components_deleted.append(component)
+                    try:
+                        # Move to CPU first if it's a model component
+                        comp = getattr(model, component)
+                        if hasattr(comp, 'cpu'):
+                            comp.cpu()
+                        delattr(model, component)
+                        components_deleted.append(component)
+                    except Exception as e:
+                        print(f"  Warning: Could not delete {component}: {e}")
 
             # Step 3: Delete any other heavy attributes
-            for attr_name in ['vision_config', 'llm_config', 'llm', 'vision_model', 'config']:
+            other_attrs = ['vision_config', 'llm_config', 'llm', 'vision_model', 'config']
+            for attr_name in other_attrs:
                 if hasattr(model, attr_name) and not attr_name.startswith('_sec_'):
                     try:
                         delattr(model, attr_name)
                         components_deleted.append(attr_name)
-                    except:
-                        pass
+                    except Exception as e:
+                        print(f"  Warning: Could not delete {attr_name}: {e}")
+
+            # Step 4: Force cleanup of any remaining model parameters
+            try:
+                # Clear any remaining parameters that might exist
+                for name, param in list(model.named_parameters()):
+                    if param.is_cuda:
+                        param.data = torch.empty(0, device='cpu')
+            except:
+                pass
 
             # Step 4: Clear PyTorch caches
             if torch.cuda.is_available():
@@ -661,12 +680,18 @@ class SeCVideoSegmentation:
             metadata = model._sec_loading_metadata
             print("Reloading SeC model from stored metadata...")
 
-            # Recreate the model using the same logic as SeCModelLoader
-            config = metadata['config']
+            # Extract metadata
             torch_dtype = metadata['torch_dtype']
             device = metadata['device']
             use_flash_attn = metadata['use_flash_attn']
+            allow_mask_overlap = metadata['allow_mask_overlap']
             model_path = metadata['model_path']
+            hydra_overrides_extra = metadata['hydra_overrides_extra']
+
+            # Recreate config fresh to avoid any stored state issues
+            from .inference.configuration_sec import SeCConfig
+            config = SeCConfig.from_pretrained(model_path)
+            config.hydra_overrides_extra = hydra_overrides_extra
 
             # Set up loading kwargs
             load_kwargs = {
@@ -758,6 +783,13 @@ class SeCVideoSegmentation:
             # Restore metadata and clear unloaded flag
             model._sec_loading_metadata = metadata
             model._sec_unloaded = False
+
+            # Clean up the temporary fresh_model to free its memory
+            del fresh_model
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            import gc
+            gc.collect()
 
             print(f"✓ Model reloaded successfully on {device}")
             return True
