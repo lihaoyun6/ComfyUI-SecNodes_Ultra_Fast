@@ -377,12 +377,12 @@ class SeCVideoSegmentation:
                 "annotation_frame_idx": ("INT", {
                     "default": 0,
                     "min": 0,
-                    "tooltip": "Advanced: Frame where initial prompt is applied"
+                    "tooltip": "Frame where initial prompt is applied"
                 }),
                 "object_id": ("INT", {
                     "default": 1,
                     "min": 1,
-                    "tooltip": "Advanced: Unique ID for multi-object tracking"
+                    "tooltip": "Unique ID for multi-object tracking"
                 }),
                 "max_frames_to_track": ("INT", {
                     "default": -1,
@@ -393,15 +393,15 @@ class SeCVideoSegmentation:
                     "default": 12,
                     "min": 1,
                     "max": 20,
-                    "tooltip": "Advanced: Number of keyframes for semantic understanding (no VRAM impact). Original paper used 7, we default to 12 for balance."
+                    "tooltip": "Number of keyframes for semantic understanding (no VRAM impact). Original paper used 7, we default to 12 for balance."
                 }),
                 "offload_video_to_cpu": ("BOOLEAN", {
                     "default": False,
-                    "tooltip": "Memory: Offload video frames to CPU (saves significant GPU memory, ~3% slower)"
+                    "tooltip": "Offload video frames to CPU (saves significant GPU memory, ~3% slower)"
                 }),
                 "auto_unload_model": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Memory: Automatically unload model from memory after segmentation to free GPU and RAM. Model will auto-reload if needed for subsequent runs (transparent to user)."
+                    "tooltip": "Automatically unload model from memory after segmentation to free GPU and RAM. Model will auto-reload if needed for subsequent runs."
                 })
             }
         }
@@ -604,7 +604,7 @@ class SeCVideoSegmentation:
                 try:
                     if hasattr(model.grounding_encoder, '_states'):
                         model.grounding_encoder._states.clear()
-                        print("  ✓ Cleared SAM2 inference states")
+                        print("Cleared SAM2 inference states")
                 except:
                     pass
 
@@ -656,13 +656,13 @@ class SeCVideoSegmentation:
                 model._sec_loading_metadata = loading_metadata
             model._sec_unloaded = True
 
-            if original_device and str(original_device).startswith('cuda'):
-                print(f"✓ Model completely unloaded from {original_device} (GPU and RAM freed)")
-            else:
-                print(f"✓ Model completely unloaded from memory (RAM freed)")
+            # if original_device and str(original_device).startswith('cuda'):
+            #     print(f"Model completely unloaded from {original_device} (GPU and RAM freed)")
+            # else:
+            #     print(f"Model completely unloaded from memory (RAM freed)")
 
-            if components_deleted:
-                print(f"  Deleted components: {', '.join(components_deleted)}")
+            # if components_deleted:
+            #     print(f"Deleted components: {', '.join(components_deleted)}")
 
         except Exception as e:
             print(f"Warning: Model cleanup encountered an issue: {e}")
@@ -942,7 +942,7 @@ class SeCVideoSegmentation:
                             points_outside.append((i, min_dist))
 
                     if points_outside:
-                        print(f"⚠ Warning: {len(points_outside)} negative point(s) are far from the mask region.")
+                        print(f"  Warning: {len(points_outside)} negative point(s) are far from the mask region.")
                         print(f"  Negative points work best inside or near the masked object to refine segmentation.")
                         print(f"  Points far outside the mask may cause unexpected results or empty segmentation.")
 
