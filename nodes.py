@@ -12,36 +12,58 @@ import sys
 from .inference.configuration_sec import SeCConfig
 from .inference.modeling_sec import SeCModel
 from transformers import AutoTokenizer
+from pathlib import Path
+
+
+def get_repo_config_path():
+    """Get path to model config files stored in the repo."""
+    repo_root = Path(__file__).parent
+    config_dir = repo_root / "model_config"
+    return str(config_dir)
 
 
 def find_sec_model():
     """
     Find SeC-4B model in registered 'sams' folder paths.
-    Returns the path to the model directory if found, None otherwise.
+    Supports both single-file models (FP16/FP8) and sharded models.
+    Returns a tuple: (model_path, is_single_file, config_path)
     """
     try:
         sams_paths = folder_paths.get_folder_paths("sams")
     except KeyError:
         # 'sams' folder type not registered yet
-        return None
+        return None, False, None
 
     for sams_dir in sams_paths:
-        model_path = os.path.join(sams_dir, "SeC-4B")
-        if os.path.exists(model_path) and os.path.isdir(model_path):
+        # Priority 1: Check for single-file FP16 model (recommended)
+        fp16_path = os.path.join(sams_dir, "SeC-4B-fp16.safetensors")
+        if os.path.exists(fp16_path) and os.path.isfile(fp16_path):
+            config_path = get_repo_config_path()
+            return fp16_path, True, config_path
+
+        # Priority 2: Check for single-file FP8 model
+        fp8_path = os.path.join(sams_dir, "SeC-4B-fp8.safetensors")
+        if os.path.exists(fp8_path) and os.path.isfile(fp8_path):
+            config_path = get_repo_config_path()
+            return fp8_path, True, config_path
+
+        # Priority 3: Check for sharded model directory (original format)
+        model_dir = os.path.join(sams_dir, "SeC-4B")
+        if os.path.exists(model_dir) and os.path.isdir(model_dir):
             # Verify required files exist
-            config_exists = os.path.exists(os.path.join(model_path, "config.json"))
+            config_exists = os.path.exists(os.path.join(model_dir, "config.json"))
             model_exists = (
-                os.path.exists(os.path.join(model_path, "model.safetensors")) or
-                os.path.exists(os.path.join(model_path, "model.safetensors.index.json")) or  # Sharded safetensors
-                os.path.exists(os.path.join(model_path, "pytorch_model.bin")) or
-                os.path.exists(os.path.join(model_path, "pytorch_model.bin.index.json"))  # Sharded bin
+                os.path.exists(os.path.join(model_dir, "model.safetensors")) or
+                os.path.exists(os.path.join(model_dir, "model.safetensors.index.json")) or  # Sharded safetensors
+                os.path.exists(os.path.join(model_dir, "pytorch_model.bin")) or
+                os.path.exists(os.path.join(model_dir, "pytorch_model.bin.index.json"))  # Sharded bin
             )
-            tokenizer_exists = os.path.exists(os.path.join(model_path, "tokenizer_config.json"))
+            tokenizer_exists = os.path.exists(os.path.join(model_dir, "tokenizer_config.json"))
 
             if config_exists and model_exists and tokenizer_exists:
-                return model_path
+                return model_dir, False, model_dir
 
-    return None
+    return None, False, None
 
 
 def download_sec_model():
@@ -169,18 +191,25 @@ class SeCModelLoader:
     def load_model(self, torch_dtype, device, use_flash_attn=True, allow_mask_overlap=True):
         """Load SeC model"""
 
-        # Find or download the SeC-4B model
-        model_path = find_sec_model()
+        # Find or download the SeC-4B model - now returns tuple
+        model_path, is_single_file, config_path = find_sec_model()
 
         if model_path is None:
-            # Model not found, download it
+            # Model not found, download it (always downloads sharded format)
             try:
                 model_path = download_sec_model()
+                is_single_file = False
+                config_path = model_path
             except Exception as e:
                 raise RuntimeError(f"Failed to download SeC-4B model: {str(e)}")
         else:
             print("=" * 80)
-            print(f"✓ Found SeC-4B model at: {model_path}")
+            if is_single_file:
+                print(f"✓ Found single-file SeC model: {os.path.basename(model_path)}")
+                print(f"  Model weights: {model_path}")
+                print(f"  Config location: {config_path}")
+            else:
+                print(f"✓ Found SeC-4B model at: {model_path}")
             print("=" * 80)
 
         # Handle device selection
@@ -225,7 +254,8 @@ class SeCModelLoader:
         hydra_overrides_extra.append(f"++model.non_overlap_masks={overlap_value}")
 
         try:
-            config = SeCConfig.from_pretrained(model_path)
+            # Load config from appropriate location (config_path for single files, model_path for directories)
+            config = SeCConfig.from_pretrained(config_path)
             config.hydra_overrides_extra = hydra_overrides_extra
 
             load_kwargs = {
@@ -247,6 +277,8 @@ class SeCModelLoader:
                 load_kwargs["low_cpu_mem_usage"] = True
                 print(f"Loading SeC model on CPU (float32)...")
 
+            # Load model: for single files, pass the weights file path
+            # For sharded models, SeCModel.from_pretrained handles directory loading
             model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
 
             # Convert model to target device and dtype
@@ -257,7 +289,8 @@ class SeCModelLoader:
                 # CPU mode - ensure everything is float32
                 model = model.to(device=device, dtype=torch_dtype)
 
-            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            # Load tokenizer from config location (not weights location for single files)
+            tokenizer = AutoTokenizer.from_pretrained(config_path, trust_remote_code=True)
             model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
 
             # Check Flash Attention availability
@@ -321,6 +354,8 @@ class SeCModelLoader:
             # Store loading metadata for potential auto-reload
             model._sec_loading_metadata = {
                 'model_path': model_path,
+                'is_single_file': is_single_file,
+                'config_path': config_path,
                 'torch_dtype': torch_dtype,
                 'device': device,
                 'use_flash_attn': use_flash_attn,
@@ -686,11 +721,13 @@ class SeCVideoSegmentation:
             use_flash_attn = metadata['use_flash_attn']
             allow_mask_overlap = metadata['allow_mask_overlap']
             model_path = metadata['model_path']
+            config_path = metadata.get('config_path', model_path)  # Fallback for old metadata
             hydra_overrides_extra = metadata['hydra_overrides_extra']
 
             # Recreate config fresh to avoid any stored state issues
+            # Use config_path which points to repo config for single files
             from .inference.configuration_sec import SeCConfig
-            config = SeCConfig.from_pretrained(model_path)
+            config = SeCConfig.from_pretrained(config_path)
             config.hydra_overrides_extra = hydra_overrides_extra
 
             # Set up loading kwargs
@@ -709,7 +746,7 @@ class SeCVideoSegmentation:
             else:
                 load_kwargs["low_cpu_mem_usage"] = True
 
-            # Load the model fresh
+            # Load the model fresh (model_path points to weights)
             from .inference.modeling_sec import SeCModel
             from transformers import AutoTokenizer
 
@@ -721,8 +758,8 @@ class SeCVideoSegmentation:
             else:
                 fresh_model = fresh_model.to(device=device, dtype=torch_dtype)
 
-            # Set up tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            # Set up tokenizer (use config_path for single files)
+            tokenizer = AutoTokenizer.from_pretrained(config_path, trust_remote_code=True)
             fresh_model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
 
             # Reinstall dtype conversion hooks if needed

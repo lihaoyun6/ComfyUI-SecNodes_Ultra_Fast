@@ -68,25 +68,59 @@ pip install -r requirements.txt
 ### 3. Restart ComfyUI
 The nodes will appear in the "SeC" category.
 
-### 4. Model Auto-Download
-**The SeC-4B model will automatically download on first use!** No manual download required.
+### 4. Model Download
 
-When you first use the SeC Model Loader node, it will:
-1. Check for existing model in `ComfyUI/models/sams/SeC-4B/`
-2. If not found, automatically download from HuggingFace (~8.5GB)
-3. Save to `ComfyUI/models/sams/SeC-4B/` for future use
+The node supports two model formats:
 
-**Optional: Pre-download Model (Faster First Run)**
+#### Option A: Single-File FP16 (Recommended - 7.35 GB)
+**Faster download, smaller size, no quality loss**
+
+Download the optimized single-file model:
 ```bash
 # Navigate to ComfyUI models directory
 cd ComfyUI/models/sams
 
-# Download model using huggingface-cli
+# Download from HuggingFace (replace with actual link when available)
+wget https://huggingface.co/[USERNAME]/SeC-4B-fp16/resolve/main/SeC-4B-fp16.safetensors
+
+# Or use huggingface-cli
+huggingface-cli download [USERNAME]/SeC-4B-fp16 SeC-4B-fp16.safetensors --local-dir .
+```
+
+Place `SeC-4B-fp16.safetensors` in `ComfyUI/models/sams/` - the node will automatically find and use it!
+
+**Benefits:**
+- 48% smaller (7.35 GB vs 14.14 GB original)
+- Single file download (no sharding complexity)
+- Config files included in this repo (no separate download)
+- Full FP16 precision maintained
+- Automatically detected and prioritized
+
+#### Option B: Auto-Download Original Model (14.14 GB)
+**Automatic fallback if single-file not found**
+
+When you first use the SeC Model Loader node without a manual download:
+1. Checks for `SeC-4B-fp16.safetensors` in `ComfyUI/models/sams/`
+2. If not found, checks for `SeC-4B-fp8.safetensors`
+3. If neither found, checks for sharded model in `ComfyUI/models/sams/SeC-4B/`
+4. If nothing found, automatically downloads original sharded model from HuggingFace (~14.14 GB)
+5. Saves to `ComfyUI/models/sams/SeC-4B/` for future use
+
+**Manual download of original sharded model (if needed):**
+```bash
+cd ComfyUI/models/sams
+
+# Download using huggingface-cli
 huggingface-cli download OpenIXCLab/SeC-4B --local-dir SeC-4B
 
 # Or using git lfs
 git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
 ```
+
+**Priority Order:**
+1. `SeC-4B-fp16.safetensors` (single file, 7.35 GB) ← Recommended
+2. `SeC-4B-fp8.safetensors` (single file, smaller but FP8 quantization)
+3. `SeC-4B/` directory (sharded model, 14.14 GB) ← Original format
 
 ## Nodes Reference
 
@@ -103,7 +137,10 @@ Load and configure the SeC model for inference. Automatically downloads SeC-4B m
 **Outputs:** `model`
 
 **Notes:**
-- The model is automatically located in `models/sams/SeC-4B/` or downloaded from HuggingFace if not found.
+- **Model Format Support**: Automatically detects and loads single-file models (FP16/FP8) or sharded models
+  - Priority: FP16 single file → FP8 single file → Sharded directory
+  - Config files are bundled in the repo (no separate config download needed for single files)
+- The model is automatically located in `models/sams/` or downloaded from HuggingFace if not found.
 - **Device options dynamically adapt** to your system:
   - 1 GPU system: Shows `auto`, `cpu`, `gpu0`
   - 2 GPU system: Shows `auto`, `cpu`, `gpu0`, `gpu1`

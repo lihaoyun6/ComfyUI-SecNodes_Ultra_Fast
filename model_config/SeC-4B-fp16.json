@@ -1,0 +1,9 @@
+{
+  "original_model": "/mnt/e/git projects/Comfyui-SecNodes/.sec/model_files",
+  "precision": "fp16",
+  "original_size_mb": 14479.549263000488,
+  "converted_size_mb": 7529.703342437744,
+  "compression_ratio": 1.9229906683564946,
+  "total_tensors": 1794,
+  "total_parameters": 3947733106
+}
