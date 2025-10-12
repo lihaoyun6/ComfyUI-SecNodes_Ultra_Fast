@@ -480,7 +480,7 @@ class SeCModel(PreTrainedModel):
 
         self.transformer = T.Compose([
             T.Lambda(lambda img: img.convert('RGB') if img.mode != 'RGB' else img),
-            T.Resize((self.image_size, self.image_size), interpolation=InterpolationMode.BICUBIC),
+            T.Resize((self.image_size, self.image_size), interpolation=3),
             T.ToTensor(),
             T.Normalize(mean=self.IMAGENET_MEAN, std=self.IMAGENET_STD)
         ])
