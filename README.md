@@ -70,85 +70,66 @@ The nodes will appear in the "SeC" category.
 
 ### 4. Model Download
 
-The node supports two model formats:
+**Download ONE of the following model formats based on your VRAM/quality needs:**
 
-#### Option A: Single-File FP16 (Recommended - 7.35 GB)
-**Faster download, smaller size, no quality loss**
+The SeC Model Loader will automatically detect and let you select which model to use.
 
-Download the optimized single-file model:
-```bash
-# Navigate to ComfyUI models directory
-cd ComfyUI/models/sams
+#### Recommended Models (Single-File Format)
 
-# Download from HuggingFace (replace with actual link when available)
-wget https://huggingface.co/[USERNAME]/SeC-4B-fp16/resolve/main/SeC-4B-fp16.safetensors
+| Format | Size | Use Case | Download Command |
+|--------|------|----------|------------------|
+| **FP16** (Recommended) | 7.35 GB | Best balance of quality and size | `huggingface-cli download VeryAladeen/SeC-4B SeC-4B-fp16.safetensors --local-dir ComfyUI/models/sams` |
+| **FP8** (Memory Efficient) | 3.97 GB | Low VRAM systems (8-10GB) | `huggingface-cli download VeryAladeen/SeC-4B SeC-4B-fp8.safetensors --local-dir ComfyUI/models/sams` |
+| **BF16** (Alternative) | 7.35 GB | Alternative to FP16, better for some GPUs | `huggingface-cli download VeryAladeen/SeC-4B SeC-4B-bf16.safetensors --local-dir ComfyUI/models/sams` |
+| **FP32** (Full Precision) | 14.14 GB | Maximum precision, highest VRAM usage | `huggingface-cli download VeryAladeen/SeC-4B SeC-4B-fp32.safetensors --local-dir ComfyUI/models/sams` |
 
-# Or use huggingface-cli
-huggingface-cli download [USERNAME]/SeC-4B-fp16 SeC-4B-fp16.safetensors --local-dir .
-```
 
-Place `SeC-4B-fp16.safetensors` in `ComfyUI/models/sams/` - the node will automatically find and use it!
+#### Backwards compatible: Original Sharded Model
 
-**Benefits:**
-- 48% smaller (7.35 GB vs 14.14 GB original)
-- Single file download (no sharding complexity)
-- Config files included in this repo (no separate download)
-- Full FP16 precision maintained
-- Automatically detected and prioritized
+**For users who previously downloaded sharded model or wish to use that format**
 
-#### Option B: Auto-Download Original Model (14.14 GB)
-**Automatic fallback if single-file not found**
-
-When you first use the SeC Model Loader node without a manual download:
-1. Checks for `SeC-4B-fp16.safetensors` in `ComfyUI/models/sams/`
-2. If not found, checks for `SeC-4B-fp8.safetensors`
-3. If neither found, checks for sharded model in `ComfyUI/models/sams/SeC-4B/`
-4. If nothing found, automatically downloads original sharded model from HuggingFace (~14.14 GB)
-5. Saves to `ComfyUI/models/sams/SeC-4B/` for future use
-
-**Manual download of original sharded model (if needed):**
 ```bash
 cd ComfyUI/models/sams
 
-# Download using huggingface-cli
+# Download using huggingface-cli (recommended)
 huggingface-cli download OpenIXCLab/SeC-4B --local-dir SeC-4B
 
 # Or using git lfs
 git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
 ```
 
-**Priority Order:**
-1. `SeC-4B-fp16.safetensors` (single file, 7.35 GB) ← Recommended
-2. `SeC-4B-fp8.safetensors` (single file, smaller but FP8 quantization)
-3. `SeC-4B/` directory (sharded model, 14.14 GB) ← Original format
+**Details:**
+- Size: ~14.14 GB (sharded into 4 files)
+- Precision: FP16
+- Includes all config files in the download
 
 ## Nodes Reference
 
 ### 1. SeC Model Loader
-Load and configure the SeC model for inference. Automatically downloads SeC-4B model on first use.
+Load and configure the SeC model for inference. Automatically detects available models in `ComfyUI/models/sams/`.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| **torch_dtype** | CHOICE | `bfloat16` | Precision: bfloat16 (recommended for GPU), float16, float32.<br>**Note:** CPU mode automatically uses float32 regardless of selection |
-| **device** | CHOICE | `auto` | Device selection (dynamically detects available GPUs):<br>• `auto`: gpu0 if available, else CPU (recommended)<br>• `cpu`: Force CPU (automatically uses float32)<br>• `gpu0`, `gpu1`, etc.: Specific GPU |
-| *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference.<br>**Note:** Automatically disabled for float32 precision (requires float16/bfloat16) |
+| **model_file** | CHOICE | First available | Select which model to load:<br>• FP32 (Full Precision - ~14.5GB)<br>• FP16 (Half Precision - 7.35GB)<br>• BF16 (Brain Float - ~7GB)<br>• FP8 (8-bit Float - 3.97GB)<br>• SeC-4B (Sharded/Original - ~14GB)<br>**Note:** Each model uses its native precision automatically |
+| **device** | CHOICE | `auto` | Device selection (dynamically detects available GPUs):<br>• `auto`: gpu0 if available, else CPU (recommended)<br>• `cpu`: Force CPU (automatically converts to float32)<br>• `gpu0`, `gpu1`, etc.: Specific GPU |
+| *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference.<br>**Note:** Automatically disabled for FP32/FP8 precision (requires FP16/BF16) |
 | *allow_mask_overlap* | BOOLEAN | True | Allow objects to overlap (disable for strict separation) |
 
 **Outputs:** `model`
 
 **Notes:**
-- **Model Format Support**: Automatically detects and loads single-file models (FP16/FP8) or sharded models
-  - Priority: FP16 single file → FP8 single file → Sharded directory
-  - Config files are bundled in the repo (no separate config download needed for single files)
-- The model is automatically located in `models/sams/` or downloaded from HuggingFace if not found.
+- **Model Selection**: Dynamically shows available models in `ComfyUI/models/sams/` directory
+  - Download at least one model format (see Model Download section above)
+  - Models are loaded in their **native precision** (FP8 stays FP8, no upconversion!)
+  - This preserves all memory benefits of smaller model formats
+- **Config files**: Bundled in this repo - no separate download needed for single-file models
 - **Device options dynamically adapt** to your system:
   - 1 GPU system: Shows `auto`, `cpu`, `gpu0`
   - 2 GPU system: Shows `auto`, `cpu`, `gpu0`, `gpu1`
   - 3+ GPU system: Shows all available GPUs
   - No GPU: Shows only `auto` and `cpu`
-- **CPU mode**: Automatically overrides to float32 precision to avoid dtype mismatch errors. CPU inference is significantly slower than GPU.
-- **Float32 precision**: Flash Attention is automatically disabled when using float32 (requires float16/bfloat16). Standard attention will be used instead (slower but compatible).
-- Dtype conversion hooks are automatically installed for GPU modes to ensure proper precision handling
+- **CPU mode**: Automatically converts model to float32 precision (CPU limitation). CPU inference is significantly slower than GPU (~10-20x).
+- **Flash Attention**: Automatically disabled for FP32 and FP8 models (requires FP16/BF16). Standard attention will be used instead.
 
 ---
 

@@ -23,126 +23,83 @@ def get_repo_config_path():
     return str(config_dir)
 
 
-def find_sec_model():
+def get_available_sec_models():
     """
-    Find SeC-4B model in registered 'sams' folder paths.
-    Supports both single-file models (FP16/FP8) and sharded models.
-    Returns a tuple: (model_path, is_single_file, config_path)
+    Scan for all available SeC-4B models in registered 'sams' folder paths.
+    Returns a list of dicts with model info: {'name': str, 'path': str, 'is_single_file': bool, 'config_path': str, 'precision': str}
     """
+    available_models = []
+
     try:
         sams_paths = folder_paths.get_folder_paths("sams")
     except KeyError:
-        # 'sams' folder type not registered yet
-        return None, False, None
+        return available_models
 
     for sams_dir in sams_paths:
-        # Priority 1: Check for single-file FP16 model (recommended)
-        fp16_path = os.path.join(sams_dir, "SeC-4B-fp16.safetensors")
-        if os.path.exists(fp16_path) and os.path.isfile(fp16_path):
-            config_path = get_repo_config_path()
-            return fp16_path, True, config_path
+        # Check for single-file models with different precisions
+        single_file_models = [
+            ("SeC-4B-fp32.safetensors", "FP32 (Full Precision - ~14.5GB)", "fp32"),
+            ("SeC-4B-fp16.safetensors", "FP16 (Half Precision - 7.35GB)", "fp16"),
+            ("SeC-4B-bf16.safetensors", "BF16 (Brain Float - ~7GB)", "bf16"),
+            ("SeC-4B-fp8.safetensors", "FP8 (8-bit Float - 3.97GB)", "fp8"),
+        ]
 
-        # Priority 2: Check for single-file FP8 model
-        fp8_path = os.path.join(sams_dir, "SeC-4B-fp8.safetensors")
-        if os.path.exists(fp8_path) and os.path.isfile(fp8_path):
-            config_path = get_repo_config_path()
-            return fp8_path, True, config_path
+        for filename, display_name, precision in single_file_models:
+            model_path = os.path.join(sams_dir, filename)
+            if os.path.exists(model_path) and os.path.isfile(model_path):
+                config_path = get_repo_config_path()
+                available_models.append({
+                    'name': display_name,
+                    'path': model_path,
+                    'is_single_file': True,
+                    'config_path': config_path,
+                    'precision': precision
+                })
 
-        # Priority 3: Check for sharded model directory (original format)
+        # Check for sharded model directory (original format)
         model_dir = os.path.join(sams_dir, "SeC-4B")
         if os.path.exists(model_dir) and os.path.isdir(model_dir):
             # Verify required files exist
             config_exists = os.path.exists(os.path.join(model_dir, "config.json"))
             model_exists = (
                 os.path.exists(os.path.join(model_dir, "model.safetensors")) or
-                os.path.exists(os.path.join(model_dir, "model.safetensors.index.json")) or  # Sharded safetensors
+                os.path.exists(os.path.join(model_dir, "model.safetensors.index.json")) or
                 os.path.exists(os.path.join(model_dir, "pytorch_model.bin")) or
-                os.path.exists(os.path.join(model_dir, "pytorch_model.bin.index.json"))  # Sharded bin
+                os.path.exists(os.path.join(model_dir, "pytorch_model.bin.index.json"))
             )
             tokenizer_exists = os.path.exists(os.path.join(model_dir, "tokenizer_config.json"))
 
             if config_exists and model_exists and tokenizer_exists:
-                return model_dir, False, model_dir
+                available_models.append({
+                    'name': "SeC-4B (Sharded/Original - ~14GB)",
+                    'path': model_dir,
+                    'is_single_file': False,
+                    'config_path': model_dir,
+                    'precision': 'fp16'  # Original format is typically fp16
+                })
 
-    return None, False, None
+    return available_models
 
 
-def download_sec_model():
+def find_sec_model():
     """
-    Download SeC-4B model from HuggingFace to the first registered 'sams' folder.
-    Returns the path to the downloaded model directory.
+    Find SeC-4B model in registered 'sams' folder paths (legacy function for backward compatibility).
+    Returns the highest priority model found.
+    Returns a tuple: (model_path, is_single_file, config_path)
     """
-    try:
-        from huggingface_hub import snapshot_download
-    except ImportError as e:
-        raise RuntimeError(
-            "huggingface_hub is required for model download. "
-            "Please install it: pip install huggingface_hub>=0.20.0"
-        ) from e
+    available_models = get_available_sec_models()
 
-    try:
-        sams_paths = folder_paths.get_folder_paths("sams")
-    except Exception as e:
-        raise RuntimeError(f"Could not access model folder paths: {e}") from e
+    if not available_models:
+        return None, False, None
 
-    if not sams_paths:
-        raise RuntimeError("No 'sams' folder paths registered. Please check your ComfyUI installation.")
+    # Return the first model (highest priority)
+    model = available_models[0]
+    return model['path'], model['is_single_file'], model['config_path']
 
-    destination = os.path.join(sams_paths[0], "SeC-4B")
 
-    print("=" * 80)
-    print("SeC-4B model not found. Downloading from HuggingFace...")
-    print(f"Repository: OpenIXCLab/SeC-4B")
-    print(f"Destination: {destination}")
-    print(f"Size: ~8.5 GB - This may take several minutes...")
-    print("=" * 80)
-
-    # Create directory if it doesn't exist
-    try:
-        os.makedirs(destination, exist_ok=True)
-    except (PermissionError, OSError) as e:
-        raise RuntimeError(
-            f"Cannot create model directory at {destination}. "
-            f"Please check permissions. Error: {e}"
-        ) from e
-
-    # Check disk space (rough estimate)
-    try:
-        import shutil
-        stat = shutil.disk_usage(os.path.dirname(destination))
-        free_gb = stat.free / (1024**3)
-        if free_gb < 10:
-            print(f"⚠ Warning: Low disk space ({free_gb:.1f} GB free). Download requires ~8.5 GB.")
-    except Exception:
-        pass  # Not critical
-
-    try:
-        snapshot_download(
-            repo_id="OpenIXCLab/SeC-4B",
-            local_dir=destination,
-            local_dir_use_symlinks=False
-        )
-    except Exception as e:
-        error_msg = str(e).lower()
-        if "connection" in error_msg or "network" in error_msg or "timeout" in error_msg:
-            raise RuntimeError(
-                f"Network error while downloading model: {e}\n"
-                "Please check your internet connection and try again."
-            ) from e
-        elif "space" in error_msg or "disk" in error_msg:
-            raise RuntimeError(
-                f"Insufficient disk space: {e}\n"
-                "Model download requires ~8.5 GB free space."
-            ) from e
-        else:
-            raise RuntimeError(f"Failed to download model from HuggingFace: {e}") from e
-
-    print("=" * 80)
-    print(f"✓ SeC-4B model downloaded successfully!")
-    print(f"✓ Location: {destination}")
-    print("=" * 80)
-
-    return destination
+# Auto-download functionality removed per user request
+# Users should manually download models using huggingface-cli or git lfs
+# See README.md for download instructions
 
 
 class SeCModelLoader:
@@ -160,11 +117,18 @@ class SeCModelLoader:
             for i in range(gpu_count):
                 device_choices.append(f"gpu{i}")
 
+        # Dynamically scan for available models
+        available_models = get_available_sec_models()
+        if available_models:
+            model_choices = [model['name'] for model in available_models]
+        else:
+            model_choices = ["(No models found - see README for download instructions)"]
+
         return {
             "required": {
-                "torch_dtype": (["bfloat16", "float16", "float32"], {
-                    "default": "bfloat16",
-                    "tooltip": "Data precision for model inference. bfloat16 recommended for best speed/quality balance. CPU mode automatically uses float32."
+                "model_file": (model_choices, {
+                    "default": model_choices[0],
+                    "tooltip": "Select SeC model file. Each file has a native precision that will be used automatically."
                 }),
                 "device": (device_choices, {
                     "default": "auto",
@@ -174,7 +138,7 @@ class SeCModelLoader:
             "optional": {
                 "use_flash_attn": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Enable Flash Attention 2 for faster inference. Automatically disabled for float32 precision (requires float16/bfloat16)."
+                    "tooltip": "Enable Flash Attention 2 for faster inference. Automatically disabled for float32 precision."
                 }),
                 "allow_mask_overlap": ("BOOLEAN", {
                     "default": True,
@@ -188,30 +152,44 @@ class SeCModelLoader:
     FUNCTION = "load_model"
     CATEGORY = "SeC"
     TITLE = "SeC Model Loader"
-    
-    def load_model(self, torch_dtype, device, use_flash_attn=True, allow_mask_overlap=True):
+
+    def load_model(self, model_file, device, use_flash_attn=True, allow_mask_overlap=True):
         """Load SeC model"""
 
-        # Find or download the SeC-4B model - now returns tuple
-        model_path, is_single_file, config_path = find_sec_model()
+        # Get available models and find the selected one
+        available_models = get_available_sec_models()
 
-        if model_path is None:
-            # Model not found, download it (always downloads sharded format)
-            try:
-                model_path = download_sec_model()
-                is_single_file = False
-                config_path = model_path
-            except Exception as e:
-                raise RuntimeError(f"Failed to download SeC-4B model: {str(e)}")
+        selected_model = None
+        for model in available_models:
+            if model['name'] == model_file:
+                selected_model = model
+                break
+
+        # Error if no model found
+        if selected_model is None or "(No models found" in model_file:
+            raise RuntimeError(
+                "No SeC model found in ComfyUI/models/sams/\n\n"
+                "Please download a model manually:\n"
+                "1. Choose a model format (FP8/FP16/BF16/FP32 or original sharded)\n"
+                "2. Follow download instructions in README.md\n"
+                "3. Restart ComfyUI or refresh the node to detect the model"
+            )
+
+        model_path = selected_model['path']
+        is_single_file = selected_model['is_single_file']
+        config_path = selected_model['config_path']
+        precision_str = selected_model['precision']
+
+        print("=" * 80)
+        if is_single_file:
+            print(f"✓ Loading single-file SeC model: {os.path.basename(model_path)}")
+            print(f"  Model weights: {model_path}")
+            print(f"  Native precision: {precision_str.upper()}")
+            print(f"  Config location: {config_path}")
         else:
-            print("=" * 80)
-            if is_single_file:
-                print(f"✓ Found single-file SeC model: {os.path.basename(model_path)}")
-                print(f"  Model weights: {model_path}")
-                print(f"  Config location: {config_path}")
-            else:
-                print(f"✓ Found SeC-4B model at: {model_path}")
-            print("=" * 80)
+            print(f"✓ Loading SeC-4B model: {model_path}")
+            print(f"  Native precision: {precision_str.upper()}")
+        print("=" * 80)
 
         # Handle device selection
         if device == "auto":
@@ -232,22 +210,29 @@ class SeCModelLoader:
                     raise ValueError(f"Invalid GPU device format: '{device}'. Expected format: 'gpu0', 'gpu1', etc.")
                 raise
 
-        # Force float32 for CPU mode to avoid dtype mismatches
+        # Map model precision to torch dtype (use model's native precision)
         dtype_map = {
             "bfloat16": torch.bfloat16,
+            "bf16": torch.bfloat16,
             "float16": torch.float16,
-            "float32": torch.float32
+            "fp16": torch.float16,
+            "float32": torch.float32,
+            "fp32": torch.float32,
+            "fp8": torch.float8_e4m3fn  # FP8 models will be loaded and used as-is
         }
-        torch_dtype = dtype_map[torch_dtype]
 
+        torch_dtype = dtype_map.get(precision_str, torch.float16)
+        print(f"Using native model precision: {torch_dtype}")
+
+        # Force float32 for CPU mode to avoid dtype mismatches
         if device == "cpu" and torch_dtype != torch.float32:
-            print(f"⚠ CPU mode requires float32 precision. Overriding {torch_dtype} -> float32")
+            print(f"⚠ CPU mode requires float32 precision. Model will be converted from {precision_str.upper()} -> FP32 on load")
             torch_dtype = torch.float32
 
-        # Flash Attention requires float16/bfloat16 - auto-disable for float32
-        if torch_dtype == torch.float32 and use_flash_attn:
-            print("⚠ Flash Attention requires float16/bfloat16 precision. Disabling Flash Attention for float32.")
-            print("  Note: Inference will use standard attention (slower but compatible with float32)")
+        # Flash Attention requires float16/bfloat16 - auto-disable for float32 and fp8
+        if torch_dtype in [torch.float32, torch.float8_e4m3fn] and use_flash_attn:
+            print(f"⚠ Flash Attention not compatible with {precision_str.upper()}. Disabling Flash Attention.")
+            print("  Note: Inference will use standard attention")
             use_flash_attn = False
 
         hydra_overrides_extra = []
@@ -308,13 +293,13 @@ class SeCModelLoader:
 
                 model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
 
-            # Convert model to target dtype
-            if device.startswith("cuda") and torch_dtype != torch.float32:
-                print(f"Converting model to {torch_dtype}...")
+            # Only convert dtype if CPU mode requires float32 (single-file models already in native precision)
+            if device == "cpu" and torch_dtype == torch.float32:
+                # CPU mode - convert to float32 if not already
+                print(f"Converting model to FP32 for CPU compatibility...")
                 model = model.to(dtype=torch_dtype)
-            elif device == "cpu":
-                # CPU mode - ensure everything is float32
-                model = model.to(dtype=torch_dtype)
+            # For GPU: model is already in its native precision, no conversion needed
+            # This preserves memory benefits of FP8/FP16 models
 
             # Load tokenizer from config location (not weights location for single files)
             tokenizer = AutoTokenizer.from_pretrained(config_path, trust_remote_code=True)
