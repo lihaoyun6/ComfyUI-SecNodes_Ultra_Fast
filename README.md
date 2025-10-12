@@ -42,6 +42,9 @@ https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
 
 ## Installation
 
+### ComfyUI-Manager
+*Coming soon*
+
 ### 1. Install Custom Node
 ```
 cd \*installdirectory*\ComfyUI\custom_nodes\
