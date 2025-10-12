@@ -8,6 +8,7 @@ from PIL import Image
 import folder_paths
 import os
 import sys
+from safetensors.torch import load_file
 
 from .inference.configuration_sec import SeCConfig
 from .inference.modeling_sec import SeCModel
@@ -258,36 +259,62 @@ class SeCModelLoader:
             config = SeCConfig.from_pretrained(config_path)
             config.hydra_overrides_extra = hydra_overrides_extra
 
-            load_kwargs = {
-                "config": config,
-                "torch_dtype": torch_dtype,
-                "use_flash_attn": use_flash_attn,
-            }
-
-            # Configure device_map based on device selection
+            # Prepare for GPU loading
             if device.startswith("cuda:"):
                 import gc
                 gc.collect()
                 torch.cuda.empty_cache()
-                load_kwargs["device_map"] = {"": device}  # Force to specific GPU
-                load_kwargs["low_cpu_mem_usage"] = True
                 print(f"Loading SeC model on {device}...")
             else:
                 # CPU mode
-                load_kwargs["low_cpu_mem_usage"] = True
                 print(f"Loading SeC model on CPU (float32)...")
 
-            # Load model: for single files, pass the weights file path
-            # For sharded models, SeCModel.from_pretrained handles directory loading
-            model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
+            # Load model differently based on format
+            if is_single_file:
+                # Manual instantiation and weight loading for single-file models
+                print(f"Loading single-file model from: {model_path}")
 
-            # Convert model to target device and dtype
+                # Instantiate model with config
+                model = SeCModel(config, use_flash_attn=use_flash_attn)
+
+                # Load weights from safetensors file
+                print("Loading weights from safetensors file...")
+                state_dict = load_file(model_path)
+
+                # Load state dict into model
+                model.load_state_dict(state_dict, strict=True)
+                model = model.eval()
+
+                # Move to target device
+                if device.startswith("cuda:"):
+                    print(f"Moving model to {device}...")
+                    model = model.to(device=device)
+                else:
+                    model = model.to(device="cpu")
+
+            else:
+                # Directory-based loading for sharded models (original approach)
+                load_kwargs = {
+                    "config": config,
+                    "torch_dtype": torch_dtype,
+                    "use_flash_attn": use_flash_attn,
+                }
+
+                if device.startswith("cuda:"):
+                    load_kwargs["device_map"] = {"": device}  # Force to specific GPU
+                    load_kwargs["low_cpu_mem_usage"] = True
+                else:
+                    load_kwargs["low_cpu_mem_usage"] = True
+
+                model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
+
+            # Convert model to target dtype
             if device.startswith("cuda") and torch_dtype != torch.float32:
                 print(f"Converting model to {torch_dtype}...")
                 model = model.to(dtype=torch_dtype)
-            else:
+            elif device == "cpu":
                 # CPU mode - ensure everything is float32
-                model = model.to(device=device, dtype=torch_dtype)
+                model = model.to(dtype=torch_dtype)
 
             # Load tokenizer from config location (not weights location for single files)
             tokenizer = AutoTokenizer.from_pretrained(config_path, trust_remote_code=True)
@@ -722,6 +749,7 @@ class SeCVideoSegmentation:
             allow_mask_overlap = metadata['allow_mask_overlap']
             model_path = metadata['model_path']
             config_path = metadata.get('config_path', model_path)  # Fallback for old metadata
+            is_single_file = metadata.get('is_single_file', False)  # Fallback for old metadata
             hydra_overrides_extra = metadata['hydra_overrides_extra']
 
             # Recreate config fresh to avoid any stored state issues
@@ -730,33 +758,52 @@ class SeCVideoSegmentation:
             config = SeCConfig.from_pretrained(config_path)
             config.hydra_overrides_extra = hydra_overrides_extra
 
-            # Set up loading kwargs
-            load_kwargs = {
-                "config": config,
-                "torch_dtype": torch_dtype,
-                "use_flash_attn": use_flash_attn,
-            }
+            # Prepare for loading
+            from .inference.modeling_sec import SeCModel
+            from transformers import AutoTokenizer
 
             if device.startswith("cuda:"):
                 import gc
                 gc.collect()
                 torch.cuda.empty_cache()
-                load_kwargs["device_map"] = {"": device}
-                load_kwargs["low_cpu_mem_usage"] = True
+
+            # Load model based on format
+            if is_single_file:
+                # Manual instantiation for single-file models
+                print(f"Reloading single-file model from: {model_path}")
+
+                fresh_model = SeCModel(config, use_flash_attn=use_flash_attn)
+                state_dict = load_file(model_path)
+                fresh_model.load_state_dict(state_dict, strict=True)
+                fresh_model = fresh_model.eval()
+
+                # Move to device
+                if device.startswith("cuda:"):
+                    fresh_model = fresh_model.to(device=device)
+                else:
+                    fresh_model = fresh_model.to(device="cpu")
+
             else:
-                load_kwargs["low_cpu_mem_usage"] = True
+                # Directory-based loading for sharded models
+                load_kwargs = {
+                    "config": config,
+                    "torch_dtype": torch_dtype,
+                    "use_flash_attn": use_flash_attn,
+                }
 
-            # Load the model fresh (model_path points to weights)
-            from .inference.modeling_sec import SeCModel
-            from transformers import AutoTokenizer
+                if device.startswith("cuda:"):
+                    load_kwargs["device_map"] = {"": device}
+                    load_kwargs["low_cpu_mem_usage"] = True
+                else:
+                    load_kwargs["low_cpu_mem_usage"] = True
 
-            fresh_model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
+                fresh_model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
 
-            # Convert to target device and dtype
+            # Convert to target dtype
             if device.startswith("cuda") and torch_dtype != torch.float32:
                 fresh_model = fresh_model.to(dtype=torch_dtype)
-            else:
-                fresh_model = fresh_model.to(device=device, dtype=torch_dtype)
+            elif device == "cpu":
+                fresh_model = fresh_model.to(dtype=torch_dtype)
 
             # Set up tokenizer (use config_path for single files)
             tokenizer = AutoTokenizer.from_pretrained(config_path, trust_remote_code=True)
