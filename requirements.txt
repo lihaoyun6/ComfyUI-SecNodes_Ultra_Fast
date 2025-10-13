@@ -9,7 +9,6 @@ torchao>=0.1.0
 
 # Image processing
 pillow>=8.0.0
-opencv-python-headless>=4.5.0
 scikit-image>=0.19.0
 scipy>=1.7.0
 

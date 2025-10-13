@@ -1319,7 +1319,7 @@ class CoordinatePlotter:
     DESCRIPTION = "Visualize coordinate points on an image or blank canvas. Useful for previewing point selections."
 
     def parse_color(self, color_str):
-        """Parse hex or RGB color string to BGR tuple for OpenCV"""
+        """Parse hex or RGB color string to RGB tuple for PIL"""
         import re
 
         color_str = color_str.strip()
@@ -1331,53 +1331,48 @@ class CoordinatePlotter:
             r = int(color_str[0:2], 16)
             g = int(color_str[2:4], 16)
             b = int(color_str[4:6], 16)
-            return (b, g, r)
+            return (r, g, b)
 
         if ',' in color_str:
             parts = [int(x.strip()) for x in color_str.split(',')]
             if len(parts) == 3:
                 r, g, b = parts
-                return (b, g, r)
+                return (r, g, b)
 
         return (0, 255, 0)
 
-    def draw_shape(self, canvas, x, y, shape, size, color):
-        """Draw a shape at the specified coordinates"""
-        import cv2
-        import numpy as np
-
+    def draw_shape(self, draw, x, y, shape, size, color):
+        """Draw a shape at the specified coordinates using PIL"""
         x, y = int(x), int(y)
 
         if shape == "circle":
-            cv2.circle(canvas, (x, y), size, color, -1)
-            cv2.circle(canvas, (x, y), size, (255, 255, 255), 2)
+            # Draw filled circle with white outline
+            draw.ellipse([x - size, y - size, x + size, y + size], fill=color, outline=(255, 255, 255), width=2)
 
         elif shape == "square":
             half_size = size
-            cv2.rectangle(canvas, (x - half_size, y - half_size),
-                         (x + half_size, y + half_size), color, -1)
-            cv2.rectangle(canvas, (x - half_size, y - half_size),
-                         (x + half_size, y + half_size), (255, 255, 255), 2)
+            # Draw filled square with white outline
+            draw.rectangle([x - half_size, y - half_size, x + half_size, y + half_size],
+                          fill=color, outline=(255, 255, 255), width=2)
 
         elif shape == "triangle":
             height = int(size * 1.732)
             half_base = size
 
-            pts = np.array([
-                [x, y - height],
-                [x - half_base, y + size],
-                [x + half_base, y + size]
-            ], np.int32)
+            pts = [
+                (x, y - height),
+                (x - half_base, y + size),
+                (x + half_base, y + size)
+            ]
 
-            cv2.fillPoly(canvas, [pts], color)
-            cv2.polylines(canvas, [pts], True, (255, 255, 255), 2)
+            # Draw filled triangle with white outline
+            draw.polygon(pts, fill=color, outline=(255, 255, 255))
 
     def plot_coordinates(self, coordinates, image=None, point_shape="circle",
                         point_size=10, point_color="#00FF00", width=512, height=512):
         """Plot coordinates on image or blank canvas"""
         import json
-        import cv2
-        import numpy as np
+        from PIL import ImageDraw
 
         try:
             if not coordinates or not coordinates.strip():
@@ -1387,23 +1382,29 @@ class CoordinatePlotter:
                 if not isinstance(coords_list, list):
                     raise ValueError("Coordinates must be a JSON array")
 
+            # Create PIL Image canvas
             if image is not None:
-                canvas = (image[0].cpu().numpy() * 255).astype(np.uint8)
-                canvas = cv2.cvtColor(canvas, cv2.COLOR_RGB2BGR)
+                # Convert ComfyUI tensor to PIL Image
+                img_array = (image[0].cpu().numpy() * 255).astype(np.uint8)
+                canvas = Image.fromarray(img_array, mode='RGB')
             else:
-                canvas = np.zeros((height, width, 3), dtype=np.uint8)
+                # Create blank canvas
+                canvas = Image.new('RGB', (width, height), color=(0, 0, 0))
 
+            # Create drawing context
+            draw = ImageDraw.Draw(canvas)
             color = self.parse_color(point_color)
 
+            # Draw each coordinate point
             for coord in coords_list:
                 if isinstance(coord, dict) and 'x' in coord and 'y' in coord:
                     x = float(coord['x'])
                     y = float(coord['y'])
-                    self.draw_shape(canvas, x, y, point_shape, point_size, color)
+                    self.draw_shape(draw, x, y, point_shape, point_size, color)
 
-            canvas = cv2.cvtColor(canvas, cv2.COLOR_BGR2RGB)
-            canvas = canvas.astype(np.float32) / 255.0
-            output = torch.from_numpy(canvas).unsqueeze(0)
+            # Convert PIL Image back to ComfyUI tensor
+            canvas_array = np.array(canvas, dtype=np.float32) / 255.0
+            output = torch.from_numpy(canvas_array).unsqueeze(0)
 
             return (output,)
 
