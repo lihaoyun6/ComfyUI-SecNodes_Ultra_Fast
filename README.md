@@ -7,12 +7,12 @@ ComfyUI custom nodes for **SeC (Segment Concept)** - State-of-the-art video obje
 ### v1.1 (2025-10-13) - Single-File Models & FP8 Support
 
 **New Features:**
-- ✨ **Single-file model formats**: Download just one file instead of sharded 4-file format
+- **Single-file model formats**: Download just one file instead of sharded 4-file format
   - FP16 (7.35GB) - Recommended default
   - FP8 (3.97GB) - VRAM-constrained systems (RTX 30+ required)
   - BF16 (7.35GB) - Alternative to FP16
   - FP32 (14.14GB) - Full precision
-- ✨ **FP8 quantization support**: Automatic weight-only quantization (W8A16) using torchao + Marlin kernels
+- **FP8 quantization support**: Automatic weight-only quantization (W8A16) using torchao + Marlin kernels
   - Saves 1.5-2GB VRAM in real-world usage
   - Requires RTX 30 series or newer (Ampere+ architecture)
   - Automatic fallback to FP16 on older GPUs
