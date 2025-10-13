@@ -4,6 +4,7 @@ TESTING.md
 ARCHITECTURE.md
 .sec/
 .claude/
+.hf/
 
 # Model files - ignore downloaded model weights but track config files
 *.safetensors
