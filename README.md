@@ -101,7 +101,7 @@ The SeC Model Loader will automatically detect and let you select which model to
   - Works on all CUDA GPUs
 - **SeC-4B-fp8.safetensors** (VRAM-Constrained) - 3.97 GB
   - **Only use if VRAM limited** (10-12GB systems)
-  - Saves 1.5-2GB VRAM vs FP16 (not 50% - see #Understanding-FP8-VRAM-Savings below)
+  - Saves 1.5-2GB VRAM vs FP16 (not 50% - see #understanding-fp8-vram-savings below)
   - **Requires RTX 30 series or newer** for VRAM savings
   - Older GPUs: Falls back to FP16 (you still save on download size)
 - **SeC-4B-bf16.safetensors** (Alternative) - 7.35 GB
