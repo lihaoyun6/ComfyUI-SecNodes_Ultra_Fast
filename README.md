@@ -18,7 +18,7 @@ ComfyUI custom nodes for **SeC (Segment Concept)** - State-of-the-art video obje
   - Automatic fallback to FP16 on older GPUs
 
 **Changes:**
-- Model loader now supports multiple precision formats with auto-detection
+- Model loader now supports multiple precision formats with auto-detection. Retains compatibility with sharded model.
 - Added `torchao>=0.1.0` to requirements.txt for FP8 support
 - Automatic GPU capability detection for FP8 compatibility
 - Node package added to ComfyUI-Manager for easy install
