@@ -76,8 +76,12 @@ The SeC Model Loader will automatically detect and let you select which model to
 
 - **SeC-4B-fp16.safetensors** (Recommended) - 7.35 GB
   - Best balance of quality and size
-- **SeC-4B-fp8.safetensors** (Memory Efficient) - 3.97 GB
-  - For low VRAM systems (8-10GB)
+  - Works on all CUDA GPUs
+- **SeC-4B-fp8.safetensors** (VRAM-Constrained) - 3.97 GB
+  - **Only use if VRAM limited** (10-12GB systems)
+  - Saves 1.5-2GB VRAM vs FP16 (not 50% - see notes below)
+  - **Requires RTX 30 series or newer** for VRAM savings
+  - Older GPUs: Falls back to FP16 (you still save on download size)
 - **SeC-4B-bf16.safetensors** (Alternative) - 7.35 GB
   - Alternative to FP16, better for some GPUs
 - **SeC-4B-fp32.safetensors** (Full Precision) - 14.14 GB
@@ -245,17 +249,41 @@ SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS
 
 ## GPU VRAM Recommendations
 
-| VRAM | Resolution | Frames | Key Settings | Performance |
-|------|-----------|--------|--------------|-------------|
-| **8-10GB** | 256x256 - 512x384 | Up to 50 | `offload_video_to_cpu: True`<br>`mllm_memory_size: 5-10` | 6-10 it/s |
-| **12-14GB** | 512x384 - 720p | 100-200 | Default settings work well<br>Can handle 200 frames @ 512x384 (~13.5GB) | 5-6 it/s |
-| **16-20GB** | 720p - 1080p | 200-500 | `mllm_memory_size: 12-15`<br>500 frames @ 512x384 uses ~17GB | 4-6 it/s |
-| **24GB+** | 1080p - 4K | 500+ | `mllm_memory_size: 15-20` for max quality<br>4K (30 frames) uses ~11.5GB | 4-5 it/s |
+| VRAM | Resolution | Frames | Model | Key Settings | Performance |
+|------|-----------|--------|-------|--------------|-------------|
+| **10-12GB** | 256x256 - 512x384 | Up to 100 | **FP8 only**<br>(RTX 30+ required) | `offload_video_to_cpu: True`<br>`mllm_memory_size: 5-10`<br>**Minimum viable config** | 6-10 it/s |
+| **16-20GB** | 512x384 - 720p | 100-500 | **FP16 recommended** | Default settings work well<br>`mllm_memory_size: 12-15`<br>FP8 optional (saves 1.5-2GB) | 5-6 it/s |
+| **24GB+** | 720p - 1080p+ | 500+ | **FP16 recommended** | `mllm_memory_size: 15-20` for max quality<br>FP8 not needed | 4-5 it/s |
 
 **Quick Tips:**
+- **FP16 is the default recommendation** - better compatibility, easier to use
+- **FP8 is for VRAM-constrained systems only** (10-12GB GPUs)
 - Low on VRAM? Enable `offload_video_to_cpu` (saves 2-3GB, only ~3% slower)
-- Use `torch_dtype: bfloat16` for best balance of speed and quality
 - Lower `mllm_memory_size` (5-10) if you need to squeeze into limited VRAM
+
+### Understanding FP8 VRAM Savings
+
+**Real-world FP8 savings: 1.5-2GB VRAM (not 50%)**
+
+FP8 quantization reduces model weight storage, but total VRAM usage also includes:
+- **Inference activations** (unchanged by quantization): 1-2GB
+- **SAM2 tracking states** (unchanged): 1-2GB
+- **Video frame buffers** (unchanged): 300-500MB
+- **Model weights** (reduced by FP8): ~3GB savings
+
+**Result:** 17GB → 15GB (2GB saved) in real-world video segmentation workloads.
+
+**Hardware Requirements:**
+- **RTX 30 series or newer** (Ampere/Ada/Hopper architecture)
+- Older GPUs: FP8 model falls back to FP16 inference automatically
+- You still save on download size (3.97GB vs 7.35GB)
+
+**When to use FP8:**
+- ✅ 10-12GB VRAM systems (with `offload_video_to_cpu`)
+- ✅ You have RTX 30 series or newer
+- ❌ 16GB+ VRAM - use FP16 instead (simpler, same quality)
+- ❌ RTX 20 series or older - no VRAM benefit (but smaller download)
+
 ### Understanding mllm_memory_size
 
 The `mllm_memory_size` parameter controls how many historical keyframes SeC's Large Vision-Language Model uses for semantic understanding:

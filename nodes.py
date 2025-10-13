@@ -81,40 +81,25 @@ def apply_fp8_weight_only_quantization(model, precision_str):
         # Import torchao quantization functions
         from torchao.quantization import quantize_, int8_weight_only
 
-        print("=" * 80)
-        print("Applying FP8 Weight-Only Quantization (torchao + Marlin kernels)")
-        print("=" * 80)
-
         quantized_components = []
 
-        # Quantize Language Model (Qwen2.5-3B) - pure Linear layers
+        # Quantize Language Model and Vision Model (transformer components)
         if hasattr(model, 'language_model'):
-            print("  Quantizing Language Model (Qwen2.5-3B)...")
             try:
                 quantize_(model.language_model, int8_weight_only())
-                quantized_components.append("Language Model")
+                quantized_components.append("LLM")
             except Exception as e:
-                print(f"    Warning: Could not quantize Language Model: {e}")
+                print(f"  Warning: Could not quantize Language Model: {e}")
 
-        # Quantize Vision Model (InternVision) - pure Linear layers
         if hasattr(model, 'vision_encoder'):
-            print("  Quantizing Vision Model (InternVision)...")
             try:
                 quantize_(model.vision_encoder, int8_weight_only())
-                quantized_components.append("Vision Model")
+                quantized_components.append("Vision")
             except Exception as e:
-                print(f"    Warning: Could not quantize Vision Model: {e}")
-
-        # Skip Grounding Encoder (SAM2.1-Hiera-L) - contains Conv2d layers
-        if hasattr(model, 'grounding_encoder'):
-            print("  Skipping Grounding Encoder (contains Conv2d layers, incompatible with FP8)")
+                print(f"  Warning: Could not quantize Vision Model: {e}")
 
         if quantized_components:
-            print("=" * 80)
-            print(f"✓ FP8 quantization complete for: {', '.join(quantized_components)}")
-            print(f"  Expected VRAM savings: ~15-18% (14GB → 11.5-12GB)")
-            print(f"  Quality: Minimal degradation expected")
-            print("=" * 80)
+            print(f"✓ FP8 quantization applied ({', '.join(quantized_components)})")
             return True
         else:
             print("  Warning: No components were quantized")
@@ -294,16 +279,7 @@ class SeCModelLoader:
         config_path = selected_model['config_path']
         precision_str = selected_model['precision']
 
-        print("=" * 80)
-        if is_single_file:
-            print(f"✓ Loading single-file SeC model: {os.path.basename(model_path)}")
-            print(f"  Model weights: {model_path}")
-            print(f"  Native precision: {precision_str.upper()}")
-            print(f"  Config location: {config_path}")
-        else:
-            print(f"✓ Loading SeC-4B model: {model_path}")
-            print(f"  Native precision: {precision_str.upper()}")
-        print("=" * 80)
+        print(f"Loading SeC model: {os.path.basename(model_path) if is_single_file else 'SeC-4B (sharded)'} [{precision_str.upper()}]")
 
         # Handle device selection
         if device == "auto":
@@ -341,14 +317,10 @@ class SeCModelLoader:
 
         # Special message for FP8 models
         if precision_str == "fp8":
-            print(f"FP8 model detected - will convert to FP16 for inference (PyTorch/cuDNN limitation)")
-            print(f"  Note: File remains 3.97GB (FP8), 46% smaller than FP16")
             if supports_fp8_quantization():
-                print(f"  GPU supports FP8 quantization - will apply weight-only quantization for VRAM savings")
+                print(f"FP8 model: converting to FP16, then applying weight-only quantization")
             else:
-                print(f"  GPU does not support FP8 quantization - inference will use FP16 (you still save on download size!)")
-        else:
-            print(f"Using native model precision: {torch_dtype}")
+                print(f"FP8 model: converting to FP16 for inference (GPU doesn't support FP8 quantization)")
 
         # Force float32 for CPU mode to avoid dtype mismatches
         if device == "cpu" and torch_dtype != torch.float32:
@@ -375,26 +347,15 @@ class SeCModelLoader:
                 import gc
                 gc.collect()
                 torch.cuda.empty_cache()
-                print(f"Loading SeC model on {device}...")
-            else:
-                # CPU mode
-                print(f"Loading SeC model on CPU (float32)...")
 
             # Load model differently based on format
             if is_single_file:
                 # Manual instantiation and weight loading for single-file models
-                print(f"Loading single-file model from: {model_path}")
-
-                # Instantiate model with config
                 model = SeCModel(config, use_flash_attn=use_flash_attn)
-
-                # Load weights from safetensors file
-                print("Loading weights from safetensors file...")
                 state_dict = load_file(model_path)
 
                 # Convert FP8 weights to FP16 if needed
                 if precision_str == "fp8":
-                    print("Converting FP8 weights to FP16 for inference...")
                     converted_state_dict = {}
                     for key, tensor in state_dict.items():
                         if tensor.dtype == torch.float8_e4m3fn:
@@ -402,7 +363,6 @@ class SeCModelLoader:
                         else:
                             converted_state_dict[key] = tensor
                     state_dict = converted_state_dict
-                    print("✓ FP8 -> FP16 conversion complete")
 
                 # Load state dict into model
                 model.load_state_dict(state_dict, strict=True)
@@ -410,7 +370,6 @@ class SeCModelLoader:
 
                 # Move to target device and convert dtype if needed
                 if device.startswith("cuda:"):
-                    print(f"Moving model to {device}...")
                     model = model.to(device=device, dtype=torch_dtype)
                 else:
                     model = model.to(device="cpu", dtype=torch_dtype)
@@ -434,14 +393,6 @@ class SeCModelLoader:
             # Load tokenizer from config location (not weights location for single files)
             tokenizer = AutoTokenizer.from_pretrained(config_path, trust_remote_code=True)
             model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
-
-            # Check Flash Attention availability
-            if use_flash_attn and device.startswith("cuda"):
-                try:
-                    from .inference.flash_attention import FlashAttention
-                    print("Using Flash Attention 2")
-                except (ImportError, ModuleNotFoundError):
-                    print("Flash Attention not installed - using standard attention")
 
             if device.startswith("cuda") and torch_dtype != torch.float32:
                 #print(f"Installing dtype conversion hooks...")
@@ -495,7 +446,7 @@ class SeCModelLoader:
             if device.startswith("cuda:"):
                 apply_fp8_weight_only_quantization(model, precision_str)
 
-            print(f"SeC model loaded successfully on {device}")
+            print(f"✓ Model loaded on {device}")
 
             # Store loading metadata for potential auto-reload
             model._sec_loading_metadata = {
@@ -772,20 +723,14 @@ class SeCVideoSegmentation:
             if hasattr(model, 'device'):
                 original_device = model.device
 
-            print("Unloading SeC model from memory...")
-
             # Preserve loading metadata before cleanup
             loading_metadata = getattr(model, '_sec_loading_metadata', None)
 
-            if loading_metadata is None:
-                print("  Warning: No loading metadata found - auto-reload will not be available")
-
-            # Step 1: Clear SAM2 inference states first
+            # Clear SAM2 inference states first
             if hasattr(model, 'grounding_encoder'):
                 try:
                     if hasattr(model.grounding_encoder, '_states'):
                         model.grounding_encoder._states.clear()
-                        print("Cleared SAM2 inference states")
                 except:
                     pass
 
@@ -859,7 +804,6 @@ class SeCVideoSegmentation:
                 return False
 
             metadata = model._sec_loading_metadata
-            print("Reloading SeC model from stored metadata...")
 
             # Extract metadata
             torch_dtype = metadata['torch_dtype']
@@ -898,14 +842,11 @@ class SeCVideoSegmentation:
             # Load model based on format
             if is_single_file:
                 # Manual instantiation for single-file models
-                print(f"Reloading single-file model from: {model_path}")
-
                 fresh_model = SeCModel(config, use_flash_attn=use_flash_attn)
                 state_dict = load_file(model_path)
 
                 # Convert FP8 weights to FP16 if needed (same as initial load)
                 if precision_str == "fp8":
-                    print("Converting FP8 weights to FP16 for inference...")
                     converted_state_dict = {}
                     for key, tensor in state_dict.items():
                         if tensor.dtype == torch.float8_e4m3fn:
@@ -1019,7 +960,6 @@ class SeCVideoSegmentation:
             import gc
             gc.collect()
 
-            print(f"✓ Model reloaded successfully on {device}")
             return True
 
         except Exception as e:
