@@ -72,18 +72,20 @@ The nodes will appear in the "SeC" category.
 
 **Download ONE of the following model formats based on your VRAM/quality needs:**
 
-The SeC Model Loader will automatically detect and let you select which model to use.
-From [https://huggingface.co/VeryAladeen/Sec-4B](https://huggingface.co/VeryAladeen/Sec-4B) please download one of the following and place in your /models/sams folder
+The SeC Model Loader will automatically detect and let you select which model to use. Download from [https://huggingface.co/VeryAladeen/Sec-4B](https://huggingface.co/VeryAladeen/Sec-4B) and place in your `ComfyUI/models/sams/` folder:
 
-| **FP16** SeC-4B-fp16.safetensors (Recommended) | 7.35 GB | Best balance of quality and size 
-| **FP8** SeC-4B-fp8.safetensors (Memory Efficient) | 3.97 GB | Low VRAM systems (8-10GB) 
-| **BF16** SeC-4B-bf16.safetensors (Alternative) | 7.35 GB | Alternative to FP16, better for some GPUs 
-| **FP32** SeC-4B-fp32.safetensors (Full Precision) | 14.14 GB | Maximum precision, highest VRAM usage 
+- **SeC-4B-fp16.safetensors** (Recommended) - 7.35 GB
+  - Best balance of quality and size
+- **SeC-4B-fp8.safetensors** (Memory Efficient) - 3.97 GB
+  - For low VRAM systems (8-10GB)
+- **SeC-4B-bf16.safetensors** (Alternative) - 7.35 GB
+  - Alternative to FP16, better for some GPUs
+- **SeC-4B-fp32.safetensors** (Full Precision) - 14.14 GB
+  - Maximum precision, highest VRAM usage
 
+#### Alternative: Original Sharded Model
 
-#### Backwards compatible: Original Sharded Model
-
-**For users who previously downloaded sharded model or wish to use that format**
+**For users who prefer the original OpenIXCLab format:**
 
 ```bash
 cd ComfyUI/models/sams
