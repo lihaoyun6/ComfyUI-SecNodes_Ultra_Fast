@@ -2,6 +2,28 @@
 
 **Self-contained** ComfyUI custom nodes for **SeC (Segment Concept)** - State-of-the-art video object segmentation that outperforms SAM 2.1, utilizing the SeC-4B model developed by OpenIXCLab.
 
+## Changelog
+
+### v1.1 (2025-10-13) - Single-File Models & FP8 Support
+
+**New Features:**
+- ✨ **Single-file model formats**: Download just one file instead of sharded 4-file format
+  - FP16 (7.35GB) - Recommended default
+  - FP8 (3.97GB) - VRAM-constrained systems (RTX 30+ required)
+  - BF16 (7.35GB) - Alternative to FP16
+  - FP32 (14.14GB) - Full precision
+- ✨ **FP8 quantization support**: Automatic weight-only quantization (W8A16) using torchao + Marlin kernels
+  - Saves 1.5-2GB VRAM in real-world usage
+  - Requires RTX 30 series or newer (Ampere+ architecture)
+  - Automatic fallback to FP16 on older GPUs
+
+**Changes:**
+- Model loader now supports multiple precision formats with auto-detection
+- Added `torchao>=0.1.0` to requirements.txt for FP8 support
+- Automatic GPU capability detection for FP8 compatibility
+
+**Download:** New single-file models available at [HuggingFace](https://huggingface.co/VeryAladeen/Sec-4B)
+
 ## What is SeC?
 
 **SeC (Segment Concept)** is a breakthrough in video object segmentation that shifts from simple feature matching to **high-level conceptual understanding**. Unlike SAM 2.1 which relies primarily on visual similarity, SeC uses a **Large Vision-Language Model (LVLM)** to understand *what* an object is conceptually, enabling robust tracking through:
@@ -103,7 +125,7 @@ git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
 
 **Details:**
 - Size: ~14.14 GB (sharded into 4 files)
-- Precision: FP16
+- Precision: FP32
 - Includes all config files in the download
 
 ## Nodes Reference
