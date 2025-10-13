@@ -346,6 +346,7 @@ This node implements the **SeC-4B** model developed by OpenIXCLab.
 ## Known Limitations
 
 **Mask-Only Inputs**: Using only a mask or bounding box may result in less stable tracking. This is due to how the underlying SAM2 and MLLM components process mask and bbox inputs. For best results, use multiple coordinate inputs or combine masks/bboxes with coordinate inputs.
+**BBOX Inputs**: Points within BBOX is currently non-functional. Just uses BBOX.
 
 ## Troubleshooting
 
