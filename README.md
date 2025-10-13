@@ -22,7 +22,7 @@ ComfyUI custom nodes for **SeC (Segment Concept)** - State-of-the-art video obje
 - Added `torchao>=0.1.0` to requirements.txt for FP8 support
 - Automatic GPU capability detection for FP8 compatibility
 
-**Download:** New single-file models available at [HuggingFace](https://huggingface.co/VeryAladeen/Sec-4B)
+**Download:** New single-file models available at [https://huggingface.co/VeryAladeen/Sec-4B](https://huggingface.co/VeryAladeen/Sec-4B)
 
 ## What is SeC?
 
@@ -69,7 +69,7 @@ https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
 
 ### 1. Install Custom Node
 ```
-cd \*installdirectory*\ComfyUI\custom_nodes\
+cd *installdirectory*/ComfyUI/custom_nodes
 git clone https://github.com/9nate-drake/Comfyui-SecNodes
 ```
 
@@ -127,6 +127,67 @@ git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
 - Size: ~14.14 GB (sharded into 4 files)
 - Precision: FP32
 - Includes all config files in the download
+
+## Requirements
+
+- **Python**: 3.10-3.12 (3.12 recommended)
+  - Python 3.13: Not recommended - experimental support with known dependency installation issues
+- **PyTorch**: 2.6.0+ (included with ComfyUI)
+- **CUDA**: 11.8+ for GPU acceleration
+- **CUDA GPU**: Recommended (CPU supported but significantly slower)
+- **VRAM**: See GPU VRAM recommendations below
+  - Can reduce significantly by enabling `offload_video_to_cpu` (~3% speed penalty)
+
+**Note on CPU Mode:**
+- CPU inference automatically uses float32 precision (bfloat16/float16 not supported on CPU)
+- Expect significantly slower performance compared to GPU (~10-20x slower depending on hardware)
+- Not recommended for production use, mainly for testing or systems without GPUs
+
+**Flash Attention 2 (Optional):**
+- Provides ~2x speedup but requires specific hardware
+- **GPU Requirements**: Ampere/Ada/Hopper architecture only (RTX 30/40 series, A100, H100)
+  - Does NOT work on RTX 20 series (Turing) or older GPUs
+- **CUDA**: 12.0+ required
+- **Windows + Python 3.12**: Use pre-compiled wheels or disable flash attention
+- The node automatically falls back to standard attention if Flash Attention is unavailable
+
+## GPU VRAM Recommendations
+
+| VRAM | Resolution | Frames | Model | Key Settings | Performance |
+|------|-----------|--------|-------|--------------|-------------|
+| **10-12GB** | 256x256 - 512x384 | Up to 100 | **FP8 only**<br>(RTX 30+ required) | `offload_video_to_cpu: True`<br>`mllm_memory_size: 5-10`<br>**Minimum viable config** | 6-10 it/s |
+| **16-20GB** | 512x384 - 720p | 100-500 | **FP16 recommended** | Default settings work well<br>`mllm_memory_size: 12-15`<br>FP8 optional (saves 1.5-2GB) | 5-6 it/s |
+| **24GB+** | 720p - 1080p+ | 500+ | **FP16 recommended** | `mllm_memory_size: 15-20` for max quality<br>FP8 not needed | 4-5 it/s |
+
+**Quick Tips:**
+- **FP16 is the default recommendation** - better compatibility, easier to use
+- **FP8 is for VRAM-constrained systems only** (10-12GB GPUs)
+- Low on VRAM? Enable `offload_video_to_cpu` (saves 2-3GB, only ~3% slower)
+- Lower `mllm_memory_size` (5-10) if you need to squeeze into limited VRAM
+
+### Understanding FP8 VRAM Savings
+
+**Real-world FP8 savings: 1.5-2GB VRAM (not 50%)**
+
+FP8 quantization reduces model weight storage, but total VRAM usage also includes:
+- **Inference activations** (unchanged by quantization): 1-2GB
+- **SAM2 tracking states** (unchanged): 1-2GB
+- **Video frame buffers** (unchanged): 300-500MB
+- **Model weights** (reduced by FP8): ~3GB savings
+
+**Result:** 17GB → 15GB (2GB saved) in real-world video segmentation workloads.
+
+**Hardware Requirements:**
+- **RTX 30 series or newer** (Ampere/Ada/Hopper architecture)
+- Older GPUs: FP8 model falls back to FP16 inference automatically
+- You still save on download size (3.97GB vs 7.35GB)
+
+**When to use FP8:**
+- ✅ 10-12GB VRAM systems (with `offload_video_to_cpu`)
+- ✅ You have RTX 30 series or newer
+- ❌ 16GB+ VRAM - use FP16 instead (simpler, same quality)
+- ❌ RTX 20 series or older - no VRAM benefit (but smaller download)
+
 
 ## Nodes Reference
 
@@ -236,75 +297,6 @@ Visualize coordinate points on images for debugging.
 | **backward** | Object appears later, reverse analysis | Frame N → start |
 | **bidirectional** | Object clearest in middle, complex scenes | Frame N → both directions |
 
-## Performance Comparison
-
-| Model | DAVIS 2017 | MOSE | SA-V | SeCVOS |
-|-------|------------|------|------|--------|
-| SAM 2.1 | 90.6 | 74.5 | 78.6 | **58.2** |
-| SAM2Long | 91.4 | 75.2 | 81.1 | 62.3 |
-| **SeC** | **91.3** | **75.3** | **82.7** | **70.0** |
-
-SeC achieves **+11.8 points** over SAM 2.1 on complex semantic scenarios (SeCVOS).
-
-## Requirements
-
-- **Python**: 3.10-3.12 (3.12 recommended)
-  - Python 3.13: Not recommended - experimental support with known dependency installation issues
-- **PyTorch**: 2.6.0+ (included with ComfyUI)
-- **CUDA**: 11.8+ for GPU acceleration
-- **CUDA GPU**: Recommended (CPU supported but significantly slower)
-- **VRAM**: See GPU VRAM recommendations below
-  - Can reduce significantly by enabling `offload_video_to_cpu` (~3% speed penalty)
-
-**Note on CPU Mode:**
-- CPU inference automatically uses float32 precision (bfloat16/float16 not supported on CPU)
-- Expect significantly slower performance compared to GPU (~10-20x slower depending on hardware)
-- Not recommended for production use, mainly for testing or systems without GPUs
-
-**Flash Attention 2 (Optional):**
-- Provides ~2x speedup but requires specific hardware
-- **GPU Requirements**: Ampere/Ada/Hopper architecture only (RTX 30/40 series, A100, H100)
-  - Does NOT work on RTX 20 series (Turing) or older GPUs
-- **CUDA**: 12.0+ required
-- **Windows + Python 3.12**: Use pre-compiled wheels or disable flash attention
-- The node automatically falls back to standard attention if Flash Attention is unavailable
-
-## GPU VRAM Recommendations
-
-| VRAM | Resolution | Frames | Model | Key Settings | Performance |
-|------|-----------|--------|-------|--------------|-------------|
-| **10-12GB** | 256x256 - 512x384 | Up to 100 | **FP8 only**<br>(RTX 30+ required) | `offload_video_to_cpu: True`<br>`mllm_memory_size: 5-10`<br>**Minimum viable config** | 6-10 it/s |
-| **16-20GB** | 512x384 - 720p | 100-500 | **FP16 recommended** | Default settings work well<br>`mllm_memory_size: 12-15`<br>FP8 optional (saves 1.5-2GB) | 5-6 it/s |
-| **24GB+** | 720p - 1080p+ | 500+ | **FP16 recommended** | `mllm_memory_size: 15-20` for max quality<br>FP8 not needed | 4-5 it/s |
-
-**Quick Tips:**
-- **FP16 is the default recommendation** - better compatibility, easier to use
-- **FP8 is for VRAM-constrained systems only** (10-12GB GPUs)
-- Low on VRAM? Enable `offload_video_to_cpu` (saves 2-3GB, only ~3% slower)
-- Lower `mllm_memory_size` (5-10) if you need to squeeze into limited VRAM
-
-### Understanding FP8 VRAM Savings
-
-**Real-world FP8 savings: 1.5-2GB VRAM (not 50%)**
-
-FP8 quantization reduces model weight storage, but total VRAM usage also includes:
-- **Inference activations** (unchanged by quantization): 1-2GB
-- **SAM2 tracking states** (unchanged): 1-2GB
-- **Video frame buffers** (unchanged): 300-500MB
-- **Model weights** (reduced by FP8): ~3GB savings
-
-**Result:** 17GB → 15GB (2GB saved) in real-world video segmentation workloads.
-
-**Hardware Requirements:**
-- **RTX 30 series or newer** (Ampere/Ada/Hopper architecture)
-- Older GPUs: FP8 model falls back to FP16 inference automatically
-- You still save on download size (3.97GB vs 7.35GB)
-
-**When to use FP8:**
-- ✅ 10-12GB VRAM systems (with `offload_video_to_cpu`)
-- ✅ You have RTX 30 series or newer
-- ❌ 16GB+ VRAM - use FP16 instead (simpler, same quality)
-- ❌ RTX 20 series or older - no VRAM benefit (but smaller download)
 
 ### Understanding mllm_memory_size
 
