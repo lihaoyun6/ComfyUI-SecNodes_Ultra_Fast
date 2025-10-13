@@ -185,7 +185,7 @@ FP8 quantization reduces model weight storage, but total VRAM usage also include
 **When to use FP8:**
 - ✅ 10-12GB VRAM systems (with `offload_video_to_cpu`)
 - ✅ You have RTX 30 series or newer
-- ❌ 16GB+ VRAM - use FP16 instead (simpler, same quality)
+- ❌ 16GB+ VRAM - use FP16 instead with 'offload_video_to_cpu'
 - ❌ RTX 20 series or older - no VRAM benefit (but smaller download)
 
 
