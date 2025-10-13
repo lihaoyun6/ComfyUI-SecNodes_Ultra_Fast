@@ -65,36 +65,49 @@ https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
 
 ## Installation
 
-### ComfyUI-Manager
+### Option 1: ComfyUI-Manager (Recommended - Easiest)
 
-- Make sure you have https://github.com/Comfy-Org/ComfyUI-Manager installed
-- Search "SecNodes"
-- Install and restart!
+1. **Install ComfyUI-Manager** (if you don't have it already):
+   - Get it from: https://github.com/ltdrdata/ComfyUI-Manager
 
-### 1. Install Custom Node
-```
-cd *installdirectory*/ComfyUI/custom_nodes
+2. **Install SeC Nodes**:
+   - Open ComfyUI Manager in ComfyUI
+   - Search for **"SeC"** or **"SecNodes"**
+   - Click **Install**
+   - Click **Restart** when prompted
+
+3. **Download a model** (see Model Download section below)
+
+4. **Done!** The SeC nodes will appear in the "SeC" category
+
+### Option 2: Manual Installation
+
+#### Step 1: Install Custom Node
+```bash
+cd ComfyUI/custom_nodes
 git clone https://github.com/9nate-drake/Comfyui-SecNodes
 ```
 
-### 2. Install Dependencies
+#### Step 2: Install Dependencies
 
-**If using ComfyUI Portable:**
+**ComfyUI Portable (Windows):**
 ```bash
-cd *install_location*/ComfyUI/custom_nodes/Comfyui-SecNodes
-*install_location*\python_embeded\python.exe -m pip install -r requirements.txt
+cd ComfyUI/custom_nodes/Comfyui-SecNodes
+../../python_embeded/python.exe -m pip install -r requirements.txt
 ```
 
-**If using standard Python installation:**
+**Standard Python Installation (Linux/Mac):**
 ```bash
-cd *install_location*/ComfyUI/custom_nodes/Comfyui-SecNodes
+cd ComfyUI/custom_nodes/Comfyui-SecNodes
 pip install -r requirements.txt
 ```
 
-### 3. Restart ComfyUI
+#### Step 3: Restart ComfyUI
 The nodes will appear in the "SeC" category.
 
-### 4. Model Download
+---
+
+## Model Download
 
 **Download ONE of the following model formats based on your VRAM/quality needs:**
 
