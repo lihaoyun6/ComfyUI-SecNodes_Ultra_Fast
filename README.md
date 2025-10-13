@@ -70,7 +70,7 @@ https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
 1. **Install ComfyUI-Manager** (if you don't have it already):
    - Get it from: https://github.com/ltdrdata/ComfyUI-Manager
 
-3. **Download a model** (see Model Download section below)
+2. **Download a model** (see Model Download section below)
 
 3. **Install SeC Nodes**:
    - Open ComfyUI Manager in ComfyUI
