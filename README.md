@@ -67,9 +67,9 @@ https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
 
 ### ComfyUI-Manager
 
-Make sure you have https://github.com/Comfy-Org/ComfyUI-Manager installed
-Search "SecNodes"
-Install and restart!
+- Make sure you have https://github.com/Comfy-Org/ComfyUI-Manager installed
+- Search "SecNodes"
+- Install and restart!
 
 ### 1. Install Custom Node
 ```
