@@ -1,8 +1,15 @@
 # development
 DEVELOPMENT_CONTEXT.md
 TESTING.md
+ARCHITECTURE.md
 .sec/
 .claude/
+.hf/
+
+# Model files - ignore downloaded model weights but track config files
+*.safetensors
+*.bin
+!model_config/**
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

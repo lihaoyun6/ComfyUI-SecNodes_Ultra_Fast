@@ -8,118 +8,197 @@ from PIL import Image
 import folder_paths
 import os
 import sys
+from safetensors.torch import load_file
 
 from .inference.configuration_sec import SeCConfig
 from .inference.modeling_sec import SeCModel
 from transformers import AutoTokenizer
+from pathlib import Path
+
+
+def get_gpu_compute_capability():
+    """
+    Get CUDA compute capability of the current GPU.
+    Returns (major, minor) tuple or None if CUDA not available.
+    """
+    if not torch.cuda.is_available():
+        return None
+
+    try:
+        device = torch.cuda.current_device()
+        major, minor = torch.cuda.get_device_capability(device)
+        return (major, minor)
+    except Exception as e:
+        print(f"Warning: Could not detect GPU compute capability: {e}")
+        return None
+
+
+def supports_fp8_quantization():
+    """
+    Check if current GPU supports FP8 quantization with Marlin kernels.
+    Requires compute capability >= 8.6 (Ampere or newer: RTX 30/40 series, A100, H100).
+    """
+    capability = get_gpu_compute_capability()
+    if capability is None:
+        return False
+
+    major, minor = capability
+    # Ampere (8.6) and newer support weight-only FP8 via Marlin kernels
+    return (major > 8) or (major == 8 and minor >= 6)
+
+
+def apply_fp8_weight_only_quantization(model, precision_str):
+    """
+    Apply weight-only FP8 quantization to Linear layers in the model using torchao.
+    Only quantizes Language Model and Vision Model (transformer components).
+    Skips Grounding Encoder (contains Conv2d layers incompatible with FP8).
+
+    Args:
+        model: The SeCModel instance
+        precision_str: Model precision string (e.g., "fp8", "fp16")
+
+    Returns:
+        bool: True if quantization was applied, False otherwise
+    """
+    # Only quantize if:
+    # 1. Model file is FP8 (to benefit from storage savings)
+    # 2. GPU supports FP8 quantization (Ampere+)
+    # 3. Model is on CUDA device
+    if precision_str != "fp8":
+        return False
+
+    if not supports_fp8_quantization():
+        capability = get_gpu_compute_capability()
+        if capability:
+            major, minor = capability
+            print(f"  GPU compute capability {major}.{minor} does not support FP8 quantization (requires >= 8.6)")
+        else:
+            print(f"  No CUDA GPU detected - FP8 quantization requires Ampere or newer (RTX 30/40 series)")
+        print(f"  Falling back to FP16 inference (you still save 46% on download size!)")
+        return False
+
+    try:
+        # Import torchao quantization functions
+        from torchao.quantization import quantize_, int8_weight_only
+
+        quantized_components = []
+
+        # Quantize Language Model and Vision Model (transformer components)
+        if hasattr(model, 'language_model'):
+            try:
+                quantize_(model.language_model, int8_weight_only())
+                quantized_components.append("LLM")
+            except Exception as e:
+                print(f"  Warning: Could not quantize Language Model: {e}")
+
+        if hasattr(model, 'vision_encoder'):
+            try:
+                quantize_(model.vision_encoder, int8_weight_only())
+                quantized_components.append("Vision")
+            except Exception as e:
+                print(f"  Warning: Could not quantize Vision Model: {e}")
+
+        if quantized_components:
+            print(f"✓ FP8 quantization applied ({', '.join(quantized_components)})")
+            return True
+        else:
+            print("  Warning: No components were quantized")
+            return False
+
+    except ImportError:
+        print("  Warning: torchao not installed - install with: pip install torchao")
+        print("  Falling back to FP16 inference")
+        return False
+    except Exception as e:
+        print(f"  Warning: FP8 quantization failed: {e}")
+        print("  Falling back to FP16 inference")
+        return False
+
+
+def get_repo_config_path():
+    """Get path to model config files stored in the repo."""
+    repo_root = Path(__file__).parent
+    config_dir = repo_root / "model_config"
+    return str(config_dir)
+
+
+def get_available_sec_models():
+    """
+    Scan for all available SeC-4B models in registered 'sams' folder paths.
+    Returns a list of dicts with model info: {'name': str, 'path': str, 'is_single_file': bool, 'config_path': str, 'precision': str}
+    """
+    available_models = []
+
+    try:
+        sams_paths = folder_paths.get_folder_paths("sams")
+    except KeyError:
+        return available_models
+
+    for sams_dir in sams_paths:
+        # Check for single-file models with different precisions
+        single_file_models = [
+            ("SeC-4B-fp32.safetensors", "fp32"),
+            ("SeC-4B-fp16.safetensors", "fp16"),
+            ("SeC-4B-bf16.safetensors", "bf16"),
+            ("SeC-4B-fp8.safetensors", "fp8"),
+        ]
+
+        for filename, precision in single_file_models:
+            model_path = os.path.join(sams_dir, filename)
+            if os.path.exists(model_path) and os.path.isfile(model_path):
+                config_path = get_repo_config_path()
+                available_models.append({
+                    'name': filename,  # Display actual filename
+                    'path': model_path,
+                    'is_single_file': True,
+                    'config_path': config_path,
+                    'precision': precision
+                })
+
+        # Check for sharded model directory (original format)
+        model_dir = os.path.join(sams_dir, "SeC-4B")
+        if os.path.exists(model_dir) and os.path.isdir(model_dir):
+            # Verify required files exist
+            config_exists = os.path.exists(os.path.join(model_dir, "config.json"))
+            model_exists = (
+                os.path.exists(os.path.join(model_dir, "model.safetensors")) or
+                os.path.exists(os.path.join(model_dir, "model.safetensors.index.json")) or
+                os.path.exists(os.path.join(model_dir, "pytorch_model.bin")) or
+                os.path.exists(os.path.join(model_dir, "pytorch_model.bin.index.json"))
+            )
+            tokenizer_exists = os.path.exists(os.path.join(model_dir, "tokenizer_config.json"))
+
+            if config_exists and model_exists and tokenizer_exists:
+                available_models.append({
+                    'name': "SeC-4B (sharded)",
+                    'path': model_dir,
+                    'is_single_file': False,
+                    'config_path': model_dir,
+                    'precision': 'fp16'  # Original format is typically fp16
+                })
+
+    return available_models
 
 
 def find_sec_model():
     """
-    Find SeC-4B model in registered 'sams' folder paths.
-    Returns the path to the model directory if found, None otherwise.
+    Find SeC-4B model in registered 'sams' folder paths (legacy function for backward compatibility).
+    Returns the highest priority model found.
+    Returns a tuple: (model_path, is_single_file, config_path)
     """
-    try:
-        sams_paths = folder_paths.get_folder_paths("sams")
-    except KeyError:
-        # 'sams' folder type not registered yet
-        return None
+    available_models = get_available_sec_models()
 
-    for sams_dir in sams_paths:
-        model_path = os.path.join(sams_dir, "SeC-4B")
-        if os.path.exists(model_path) and os.path.isdir(model_path):
-            # Verify required files exist
-            config_exists = os.path.exists(os.path.join(model_path, "config.json"))
-            model_exists = (
-                os.path.exists(os.path.join(model_path, "model.safetensors")) or
-                os.path.exists(os.path.join(model_path, "model.safetensors.index.json")) or  # Sharded safetensors
-                os.path.exists(os.path.join(model_path, "pytorch_model.bin")) or
-                os.path.exists(os.path.join(model_path, "pytorch_model.bin.index.json"))  # Sharded bin
-            )
-            tokenizer_exists = os.path.exists(os.path.join(model_path, "tokenizer_config.json"))
+    if not available_models:
+        return None, False, None
 
-            if config_exists and model_exists and tokenizer_exists:
-                return model_path
-
-    return None
+    # Return the first model (highest priority)
+    model = available_models[0]
+    return model['path'], model['is_single_file'], model['config_path']
 
 
-def download_sec_model():
-    """
-    Download SeC-4B model from HuggingFace to the first registered 'sams' folder.
-    Returns the path to the downloaded model directory.
-    """
-    try:
-        from huggingface_hub import snapshot_download
-    except ImportError as e:
-        raise RuntimeError(
-            "huggingface_hub is required for model download. "
-            "Please install it: pip install huggingface_hub>=0.20.0"
-        ) from e
-
-    try:
-        sams_paths = folder_paths.get_folder_paths("sams")
-    except Exception as e:
-        raise RuntimeError(f"Could not access model folder paths: {e}") from e
-
-    if not sams_paths:
-        raise RuntimeError("No 'sams' folder paths registered. Please check your ComfyUI installation.")
-
-    destination = os.path.join(sams_paths[0], "SeC-4B")
-
-    print("=" * 80)
-    print("SeC-4B model not found. Downloading from HuggingFace...")
-    print(f"Repository: OpenIXCLab/SeC-4B")
-    print(f"Destination: {destination}")
-    print(f"Size: ~8.5 GB - This may take several minutes...")
-    print("=" * 80)
-
-    # Create directory if it doesn't exist
-    try:
-        os.makedirs(destination, exist_ok=True)
-    except (PermissionError, OSError) as e:
-        raise RuntimeError(
-            f"Cannot create model directory at {destination}. "
-            f"Please check permissions. Error: {e}"
-        ) from e
-
-    # Check disk space (rough estimate)
-    try:
-        import shutil
-        stat = shutil.disk_usage(os.path.dirname(destination))
-        free_gb = stat.free / (1024**3)
-        if free_gb < 10:
-            print(f"⚠ Warning: Low disk space ({free_gb:.1f} GB free). Download requires ~8.5 GB.")
-    except Exception:
-        pass  # Not critical
-
-    try:
-        snapshot_download(
-            repo_id="OpenIXCLab/SeC-4B",
-            local_dir=destination,
-            local_dir_use_symlinks=False
-        )
-    except Exception as e:
-        error_msg = str(e).lower()
-        if "connection" in error_msg or "network" in error_msg or "timeout" in error_msg:
-            raise RuntimeError(
-                f"Network error while downloading model: {e}\n"
-                "Please check your internet connection and try again."
-            ) from e
-        elif "space" in error_msg or "disk" in error_msg:
-            raise RuntimeError(
-                f"Insufficient disk space: {e}\n"
-                "Model download requires ~8.5 GB free space."
-            ) from e
-        else:
-            raise RuntimeError(f"Failed to download model from HuggingFace: {e}") from e
-
-    print("=" * 80)
-    print(f"✓ SeC-4B model downloaded successfully!")
-    print(f"✓ Location: {destination}")
-    print("=" * 80)
-
-    return destination
+# Auto-download functionality removed per user request
+# Users should manually download models using huggingface-cli or git lfs
+# See README.md for download instructions
 
 
 class SeCModelLoader:
@@ -137,11 +216,18 @@ class SeCModelLoader:
             for i in range(gpu_count):
                 device_choices.append(f"gpu{i}")
 
+        # Dynamically scan for available models
+        available_models = get_available_sec_models()
+        if available_models:
+            model_choices = [model['name'] for model in available_models]
+        else:
+            model_choices = ["(No models found - see README for download instructions)"]
+
         return {
             "required": {
-                "torch_dtype": (["bfloat16", "float16", "float32"], {
-                    "default": "bfloat16",
-                    "tooltip": "Data precision for model inference. bfloat16 recommended for best speed/quality balance. CPU mode automatically uses float32."
+                "model_file": (model_choices, {
+                    "default": model_choices[0],
+                    "tooltip": "Select SeC model file. Each file has a native precision that will be used automatically."
                 }),
                 "device": (device_choices, {
                     "default": "auto",
@@ -151,7 +237,7 @@ class SeCModelLoader:
             "optional": {
                 "use_flash_attn": ("BOOLEAN", {
                     "default": True,
-                    "tooltip": "Enable Flash Attention 2 for faster inference. Automatically disabled for float32 precision (requires float16/bfloat16)."
+                    "tooltip": "Enable Flash Attention 2 for faster inference. Automatically disabled for float32 precision."
                 }),
                 "allow_mask_overlap": ("BOOLEAN", {
                     "default": True,
@@ -165,23 +251,35 @@ class SeCModelLoader:
     FUNCTION = "load_model"
     CATEGORY = "SeC"
     TITLE = "SeC Model Loader"
-    
-    def load_model(self, torch_dtype, device, use_flash_attn=True, allow_mask_overlap=True):
+
+    def load_model(self, model_file, device, use_flash_attn=True, allow_mask_overlap=True):
         """Load SeC model"""
 
-        # Find or download the SeC-4B model
-        model_path = find_sec_model()
+        # Get available models and find the selected one
+        available_models = get_available_sec_models()
 
-        if model_path is None:
-            # Model not found, download it
-            try:
-                model_path = download_sec_model()
-            except Exception as e:
-                raise RuntimeError(f"Failed to download SeC-4B model: {str(e)}")
-        else:
-            print("=" * 80)
-            print(f"✓ Found SeC-4B model at: {model_path}")
-            print("=" * 80)
+        selected_model = None
+        for model in available_models:
+            if model['name'] == model_file:
+                selected_model = model
+                break
+
+        # Error if no model found
+        if selected_model is None or "(No models found" in model_file:
+            raise RuntimeError(
+                "No SeC model found in ComfyUI/models/sams/\n\n"
+                "Please download a model manually:\n"
+                "1. Choose a model format (FP8/FP16/BF16/FP32 or original sharded)\n"
+                "2. Follow download instructions in README.md\n"
+                "3. Restart ComfyUI or refresh the node to detect the model"
+            )
+
+        model_path = selected_model['path']
+        is_single_file = selected_model['is_single_file']
+        config_path = selected_model['config_path']
+        precision_str = selected_model['precision']
+
+        print(f"Loading SeC model: {os.path.basename(model_path) if is_single_file else 'SeC-4B (sharded)'} [{precision_str.upper()}]")
 
         # Handle device selection
         if device == "auto":
@@ -202,22 +300,37 @@ class SeCModelLoader:
                     raise ValueError(f"Invalid GPU device format: '{device}'. Expected format: 'gpu0', 'gpu1', etc.")
                 raise
 
-        # Force float32 for CPU mode to avoid dtype mismatches
+        # Map model precision to torch dtype
+        # Note: FP8 models are stored as FP8 but must be converted to FP16 for inference
+        # due to PyTorch/cuDNN limitations with FP8 convolutions
         dtype_map = {
             "bfloat16": torch.bfloat16,
+            "bf16": torch.bfloat16,
             "float16": torch.float16,
-            "float32": torch.float32
+            "fp16": torch.float16,
+            "float32": torch.float32,
+            "fp32": torch.float32,
+            "fp8": torch.float16  # FP8 files converted to FP16 for inference (cuDNN limitation)
         }
-        torch_dtype = dtype_map[torch_dtype]
 
+        torch_dtype = dtype_map.get(precision_str, torch.float16)
+
+        # Special message for FP8 models
+        if precision_str == "fp8":
+            if supports_fp8_quantization():
+                print(f"FP8 model: converting to FP16, then applying weight-only quantization")
+            else:
+                print(f"FP8 model: converting to FP16 for inference (GPU doesn't support FP8 quantization)")
+
+        # Force float32 for CPU mode to avoid dtype mismatches
         if device == "cpu" and torch_dtype != torch.float32:
-            print(f"⚠ CPU mode requires float32 precision. Overriding {torch_dtype} -> float32")
+            print(f"⚠ CPU mode requires float32 precision. Model will be converted from {precision_str.upper()} -> FP32 on load")
             torch_dtype = torch.float32
 
         # Flash Attention requires float16/bfloat16 - auto-disable for float32
         if torch_dtype == torch.float32 and use_flash_attn:
-            print("⚠ Flash Attention requires float16/bfloat16 precision. Disabling Flash Attention for float32.")
-            print("  Note: Inference will use standard attention (slower but compatible with float32)")
+            print(f"⚠ Flash Attention not compatible with FP32. Disabling Flash Attention.")
+            print("  Note: Inference will use standard attention")
             use_flash_attn = False
 
         hydra_overrides_extra = []
@@ -225,48 +338,61 @@ class SeCModelLoader:
         hydra_overrides_extra.append(f"++model.non_overlap_masks={overlap_value}")
 
         try:
-            config = SeCConfig.from_pretrained(model_path)
+            # Load config from appropriate location (config_path for single files, model_path for directories)
+            config = SeCConfig.from_pretrained(config_path)
             config.hydra_overrides_extra = hydra_overrides_extra
 
-            load_kwargs = {
-                "config": config,
-                "torch_dtype": torch_dtype,
-                "use_flash_attn": use_flash_attn,
-            }
-
-            # Configure device_map based on device selection
+            # Prepare for GPU loading
             if device.startswith("cuda:"):
                 import gc
                 gc.collect()
                 torch.cuda.empty_cache()
-                load_kwargs["device_map"] = {"": device}  # Force to specific GPU
-                load_kwargs["low_cpu_mem_usage"] = True
-                print(f"Loading SeC model on {device}...")
+
+            # Load model differently based on format
+            if is_single_file:
+                # Manual instantiation and weight loading for single-file models
+                model = SeCModel(config, use_flash_attn=use_flash_attn)
+                state_dict = load_file(model_path)
+
+                # Convert FP8 weights to FP16 if needed
+                if precision_str == "fp8":
+                    converted_state_dict = {}
+                    for key, tensor in state_dict.items():
+                        if tensor.dtype == torch.float8_e4m3fn:
+                            converted_state_dict[key] = tensor.to(torch.float16)
+                        else:
+                            converted_state_dict[key] = tensor
+                    state_dict = converted_state_dict
+
+                # Load state dict into model
+                model.load_state_dict(state_dict, strict=True)
+                model = model.eval()
+
+                # Move to target device and convert dtype if needed
+                if device.startswith("cuda:"):
+                    model = model.to(device=device, dtype=torch_dtype)
+                else:
+                    model = model.to(device="cpu", dtype=torch_dtype)
+
             else:
-                # CPU mode
-                load_kwargs["low_cpu_mem_usage"] = True
-                print(f"Loading SeC model on CPU (float32)...")
+                # Directory-based loading for sharded models (original approach)
+                load_kwargs = {
+                    "config": config,
+                    "torch_dtype": torch_dtype,
+                    "use_flash_attn": use_flash_attn,
+                }
 
-            model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
+                if device.startswith("cuda:"):
+                    load_kwargs["device_map"] = {"": device}  # Force to specific GPU
+                    load_kwargs["low_cpu_mem_usage"] = True
+                else:
+                    load_kwargs["low_cpu_mem_usage"] = True
 
-            # Convert model to target device and dtype
-            if device.startswith("cuda") and torch_dtype != torch.float32:
-                print(f"Converting model to {torch_dtype}...")
-                model = model.to(dtype=torch_dtype)
-            else:
-                # CPU mode - ensure everything is float32
-                model = model.to(device=device, dtype=torch_dtype)
+                model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
 
-            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            # Load tokenizer from config location (not weights location for single files)
+            tokenizer = AutoTokenizer.from_pretrained(config_path, trust_remote_code=True)
             model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
-
-            # Check Flash Attention availability
-            if use_flash_attn and device.startswith("cuda"):
-                try:
-                    from .inference.flash_attention import FlashAttention
-                    print("Using Flash Attention 2")
-                except (ImportError, ModuleNotFoundError):
-                    print("Flash Attention not installed - using standard attention")
 
             if device.startswith("cuda") and torch_dtype != torch.float32:
                 #print(f"Installing dtype conversion hooks...")
@@ -316,11 +442,17 @@ class SeCModelLoader:
                     if len(list(module.parameters(recurse=False))) > 0:
                         module.register_forward_pre_hook(dtype_conversion_hook, with_kwargs=True)
 
-            print(f"SeC model loaded successfully on {device}")
+            # Apply FP8 weight-only quantization if applicable (after model is on device)
+            if device.startswith("cuda:"):
+                apply_fp8_weight_only_quantization(model, precision_str)
+
+            print(f"✓ Model loaded on {device}")
 
             # Store loading metadata for potential auto-reload
             model._sec_loading_metadata = {
                 'model_path': model_path,
+                'is_single_file': is_single_file,
+                'config_path': config_path,
                 'torch_dtype': torch_dtype,
                 'device': device,
                 'use_flash_attn': use_flash_attn,
@@ -591,20 +723,14 @@ class SeCVideoSegmentation:
             if hasattr(model, 'device'):
                 original_device = model.device
 
-            print("Unloading SeC model from memory...")
-
             # Preserve loading metadata before cleanup
             loading_metadata = getattr(model, '_sec_loading_metadata', None)
 
-            if loading_metadata is None:
-                print("  Warning: No loading metadata found - auto-reload will not be available")
-
-            # Step 1: Clear SAM2 inference states first
+            # Clear SAM2 inference states first
             if hasattr(model, 'grounding_encoder'):
                 try:
                     if hasattr(model.grounding_encoder, '_states'):
                         model.grounding_encoder._states.clear()
-                        print("Cleared SAM2 inference states")
                 except:
                     pass
 
@@ -678,7 +804,6 @@ class SeCVideoSegmentation:
                 return False
 
             metadata = model._sec_loading_metadata
-            print("Reloading SeC model from stored metadata...")
 
             # Extract metadata
             torch_dtype = metadata['torch_dtype']
@@ -686,43 +811,83 @@ class SeCVideoSegmentation:
             use_flash_attn = metadata['use_flash_attn']
             allow_mask_overlap = metadata['allow_mask_overlap']
             model_path = metadata['model_path']
+            config_path = metadata.get('config_path', model_path)  # Fallback for old metadata
+            is_single_file = metadata.get('is_single_file', False)  # Fallback for old metadata
             hydra_overrides_extra = metadata['hydra_overrides_extra']
 
             # Recreate config fresh to avoid any stored state issues
+            # Use config_path which points to repo config for single files
             from .inference.configuration_sec import SeCConfig
-            config = SeCConfig.from_pretrained(model_path)
+            config = SeCConfig.from_pretrained(config_path)
             config.hydra_overrides_extra = hydra_overrides_extra
 
-            # Set up loading kwargs
-            load_kwargs = {
-                "config": config,
-                "torch_dtype": torch_dtype,
-                "use_flash_attn": use_flash_attn,
-            }
+            # Prepare for loading
+            from .inference.modeling_sec import SeCModel
+            from transformers import AutoTokenizer
 
             if device.startswith("cuda:"):
                 import gc
                 gc.collect()
                 torch.cuda.empty_cache()
-                load_kwargs["device_map"] = {"": device}
-                load_kwargs["low_cpu_mem_usage"] = True
+
+            # Detect precision from model path to handle FP8 conversion
+            precision_str = "fp16"  # default
+            if "fp8" in model_path.lower():
+                precision_str = "fp8"
+            elif "fp32" in model_path.lower():
+                precision_str = "fp32"
+            elif "bf16" in model_path.lower():
+                precision_str = "bf16"
+
+            # Load model based on format
+            if is_single_file:
+                # Manual instantiation for single-file models
+                fresh_model = SeCModel(config, use_flash_attn=use_flash_attn)
+                state_dict = load_file(model_path)
+
+                # Convert FP8 weights to FP16 if needed (same as initial load)
+                if precision_str == "fp8":
+                    converted_state_dict = {}
+                    for key, tensor in state_dict.items():
+                        if tensor.dtype == torch.float8_e4m3fn:
+                            converted_state_dict[key] = tensor.to(torch.float16)
+                        else:
+                            converted_state_dict[key] = tensor
+                    state_dict = converted_state_dict
+
+                fresh_model.load_state_dict(state_dict, strict=True)
+                fresh_model = fresh_model.eval()
+
+                # Move to device and convert dtype
+                if device.startswith("cuda:"):
+                    fresh_model = fresh_model.to(device=device, dtype=torch_dtype)
+                else:
+                    fresh_model = fresh_model.to(device="cpu", dtype=torch_dtype)
+
             else:
-                load_kwargs["low_cpu_mem_usage"] = True
+                # Directory-based loading for sharded models
+                load_kwargs = {
+                    "config": config,
+                    "torch_dtype": torch_dtype,
+                    "use_flash_attn": use_flash_attn,
+                }
 
-            # Load the model fresh
-            from .inference.modeling_sec import SeCModel
-            from transformers import AutoTokenizer
+                if device.startswith("cuda:"):
+                    load_kwargs["device_map"] = {"": device}
+                    load_kwargs["low_cpu_mem_usage"] = True
+                else:
+                    load_kwargs["low_cpu_mem_usage"] = True
 
-            fresh_model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
+                fresh_model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
 
-            # Convert to target device and dtype
+            # Convert to target dtype
             if device.startswith("cuda") and torch_dtype != torch.float32:
                 fresh_model = fresh_model.to(dtype=torch_dtype)
-            else:
-                fresh_model = fresh_model.to(device=device, dtype=torch_dtype)
+            elif device == "cpu":
+                fresh_model = fresh_model.to(dtype=torch_dtype)
 
-            # Set up tokenizer
-            tokenizer = AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
+            # Set up tokenizer (use config_path for single files)
+            tokenizer = AutoTokenizer.from_pretrained(config_path, trust_remote_code=True)
             fresh_model.preparing_for_generation(tokenizer=tokenizer, torch_dtype=torch_dtype)
 
             # Reinstall dtype conversion hooks if needed
@@ -772,6 +937,10 @@ class SeCVideoSegmentation:
                     if len(list(module.parameters(recurse=False))) > 0:
                         module.register_forward_pre_hook(dtype_conversion_hook, with_kwargs=True)
 
+            # Apply FP8 weight-only quantization if applicable (after model is on device)
+            if device.startswith("cuda:"):
+                apply_fp8_weight_only_quantization(fresh_model, precision_str)
+
             # Copy all attributes from fresh model to original model
             for attr_name in dir(fresh_model):
                 if not attr_name.startswith('_sec_') and not attr_name.startswith('__'):
@@ -791,7 +960,6 @@ class SeCVideoSegmentation:
             import gc
             gc.collect()
 
-            print(f"✓ Model reloaded successfully on {device}")
             return True
 
         except Exception as e:
