@@ -21,6 +21,7 @@ ComfyUI custom nodes for **SeC (Segment Concept)** - State-of-the-art video obje
 - Model loader now supports multiple precision formats with auto-detection
 - Added `torchao>=0.1.0` to requirements.txt for FP8 support
 - Automatic GPU capability detection for FP8 compatibility
+- Node package added to ComfyUI-Manager for easy install
 
 **Download:** New single-file models available at [https://huggingface.co/VeryAladeen/Sec-4B](https://huggingface.co/VeryAladeen/Sec-4B)
 
@@ -65,7 +66,10 @@ https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
 ## Installation
 
 ### ComfyUI-Manager
-*Coming soon*
+
+Make sure you have https://github.com/Comfy-Org/ComfyUI-Manager installed
+Search "SecNodes"
+Install and restart!
 
 ### 1. Install Custom Node
 ```
