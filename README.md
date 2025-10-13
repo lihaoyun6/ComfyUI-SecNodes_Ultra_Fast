@@ -345,23 +345,16 @@ This node implements the **SeC-4B** model developed by OpenIXCLab.
 
 ## Troubleshooting
 
-**Model download issues**:
-- Ensure you have ~8.5GB disk space and internet connection
-- Model auto-downloads to `ComfyUI/models/sams/SeC-4B/` on first use
-- Check console for download progress and any error messages
 
 **CUDA out of memory**:
 - Enable `offload_video_to_cpu` (saves 2-3GB VRAM, only ~3% slower)
-- Try `float16` precision instead of `bfloat16`
+- Also ensure you are using the fp8 variant for maximum VRAM saving
 - Process fewer frames at once (split video into smaller batches)
 - See GPU VRAM recommendations above for your hardware tier
 
 **Slow inference**:
 - Enable `use_flash_attn` in model loader (requires Flash Attention 2)
 - Disable `offload_video_to_cpu` if you have sufficient VRAM
-- Use `bfloat16` precision (default)
-
-**Empty masks**: Provide clearer visual prompts or try different frame
 
 ---
 
