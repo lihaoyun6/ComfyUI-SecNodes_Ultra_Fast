@@ -38,18 +38,18 @@ def get_available_sec_models():
     for sams_dir in sams_paths:
         # Check for single-file models with different precisions
         single_file_models = [
-            ("SeC-4B-fp32.safetensors", "FP32 (Full Precision - ~14.5GB)", "fp32"),
-            ("SeC-4B-fp16.safetensors", "FP16 (Half Precision - 7.35GB)", "fp16"),
-            ("SeC-4B-bf16.safetensors", "BF16 (Brain Float - ~7GB)", "bf16"),
-            ("SeC-4B-fp8.safetensors", "FP8 (8-bit Float - 3.97GB)", "fp8"),
+            ("SeC-4B-fp32.safetensors", "fp32"),
+            ("SeC-4B-fp16.safetensors", "fp16"),
+            ("SeC-4B-bf16.safetensors", "bf16"),
+            ("SeC-4B-fp8.safetensors", "fp8"),
         ]
 
-        for filename, display_name, precision in single_file_models:
+        for filename, precision in single_file_models:
             model_path = os.path.join(sams_dir, filename)
             if os.path.exists(model_path) and os.path.isfile(model_path):
                 config_path = get_repo_config_path()
                 available_models.append({
-                    'name': display_name,
+                    'name': filename,  # Display actual filename
                     'path': model_path,
                     'is_single_file': True,
                     'config_path': config_path,
@@ -71,7 +71,7 @@ def get_available_sec_models():
 
             if config_exists and model_exists and tokenizer_exists:
                 available_models.append({
-                    'name': "SeC-4B (Sharded/Original - ~14GB)",
+                    'name': "SeC-4B (sharded)",
                     'path': model_dir,
                     'is_single_file': False,
                     'config_path': model_dir,

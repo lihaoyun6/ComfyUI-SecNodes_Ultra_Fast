@@ -73,15 +73,12 @@ The nodes will appear in the "SeC" category.
 **Download ONE of the following model formats based on your VRAM/quality needs:**
 
 The SeC Model Loader will automatically detect and let you select which model to use.
+From [https://huggingface.co/VeryAladeen/Sec-4B](https://huggingface.co/VeryAladeen/Sec-4B) please download one of the following and place in your /models/sams folder
 
-#### Recommended Models (Single-File Format)
-
-| Format | Size | Use Case | Download Command |
-|--------|------|----------|------------------|
-| **FP16** (Recommended) | 7.35 GB | Best balance of quality and size | `huggingface-cli download VeryAladeen/SeC-4B SeC-4B-fp16.safetensors --local-dir ComfyUI/models/sams` |
-| **FP8** (Memory Efficient) | 3.97 GB | Low VRAM systems (8-10GB) | `huggingface-cli download VeryAladeen/SeC-4B SeC-4B-fp8.safetensors --local-dir ComfyUI/models/sams` |
-| **BF16** (Alternative) | 7.35 GB | Alternative to FP16, better for some GPUs | `huggingface-cli download VeryAladeen/SeC-4B SeC-4B-bf16.safetensors --local-dir ComfyUI/models/sams` |
-| **FP32** (Full Precision) | 14.14 GB | Maximum precision, highest VRAM usage | `huggingface-cli download VeryAladeen/SeC-4B SeC-4B-fp32.safetensors --local-dir ComfyUI/models/sams` |
+| **FP16** SeC-4B-fp16.safetensors (Recommended) | 7.35 GB | Best balance of quality and size 
+| **FP8** SeC-4B-fp8.safetensors (Memory Efficient) | 3.97 GB | Low VRAM systems (8-10GB) 
+| **BF16** SeC-4B-bf16.safetensors (Alternative) | 7.35 GB | Alternative to FP16, better for some GPUs 
+| **FP32** SeC-4B-fp32.safetensors (Full Precision) | 14.14 GB | Maximum precision, highest VRAM usage 
 
 
 #### Backwards compatible: Original Sharded Model
