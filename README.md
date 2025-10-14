@@ -272,13 +272,15 @@ You can combine different input types for powerful segmentation control:
 | Input Combination | Behavior |
 |-------------------|----------|
 | **Points only** | Standard point-based segmentation |
-| **Bbox only** | Segment object within bounding box |
+| **Bbox only** | Segment the most prominent object within bounding box |
 | **Mask only** | Track the masked region |
+| **Bbox + Points** | **Two-stage refinement**: Bbox establishes initial region, then points refine the segmentation within that region |
 | **Mask + Positive points** | Only positive points **inside the mask** are used to refine which part of the masked region to segment |
 | **Mask + Negative points** | All negative points are used to exclude regions from the mask |
 | **Mask + Positive + Negative** | Positive points inside mask refine the region, negative points exclude areas |
 
 **Example Use Cases:**
+- **Bbox + point refinement**: Draw bbox around a person, add point on their shirt to segment just the shirt instead of the whole person
 - **Rough mask + precise points**: Draw a rough mask around a person, then add positive points on their face to focus the segmentation
 - **Mask + negative exclusions**: Mask an object, add negative points on unwanted parts (e.g., exclude a hand from a person mask)
 - **Point filtering**: Positive points outside the mask boundary are automatically ignored, preventing accidental selections
@@ -345,8 +347,7 @@ This node implements the **SeC-4B** model developed by OpenIXCLab.
 
 ## Known Limitations
 
-**Mask-Only Inputs**: Using only a mask or bounding box may result in less stable tracking. This is due to how the underlying SAM2 and MLLM components process mask and bbox inputs. For best results, use multiple coordinate inputs or combine masks/bboxes with coordinate inputs.
-**BBOX Inputs**: Points within BBOX is currently non-functional. Just uses BBOX.
+**Mask-Only Inputs**: Using only a mask or bounding box may result in less stable tracking. This is due to how the underlying SAM2 and MLLM components process mask and bbox inputs. For best results, combine masks/bboxes with coordinate points for more precise control.
 
 ## Troubleshooting
 

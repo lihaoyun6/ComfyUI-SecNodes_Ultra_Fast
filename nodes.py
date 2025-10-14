@@ -1196,8 +1196,35 @@ class SeCVideoSegmentation:
                 points = neg_points
                 labels = np.zeros(len(neg_points), dtype=np.int32)
 
-            # Step 4: Add points/bbox to refine the segmentation
-            if points is not None or bbox_coords is not None:
+            # Step 4: Handle bbox + points combination properly
+            # If both bbox and points are provided, we need to:
+            # 1. First establish initial mask using bbox only
+            # 2. Then refine with points
+            if bbox_coords is not None and points is not None:
+                # First: Use bbox to create initial segmentation
+                _, out_obj_ids, out_mask_logits = model.grounding_encoder.add_new_points_or_box(
+                    inference_state=inference_state,
+                    frame_idx=annotation_frame_idx,
+                    obj_id=object_id,
+                    points=None,
+                    labels=None,
+                    box=bbox_coords,
+                )
+                init_mask = (out_mask_logits[0] > 0.0).cpu().numpy()
+
+                # Then: Refine with points
+                _, out_obj_ids, out_mask_logits = model.grounding_encoder.add_new_points_or_box(
+                    inference_state=inference_state,
+                    frame_idx=annotation_frame_idx,
+                    obj_id=object_id,
+                    points=points,
+                    labels=labels,
+                    box=None,
+                )
+                init_mask = (out_mask_logits[0] > 0.0).cpu().numpy()
+
+            # Step 4b: Handle bbox OR points (not both)
+            elif points is not None or bbox_coords is not None:
                 _, out_obj_ids, out_mask_logits = model.grounding_encoder.add_new_points_or_box(
                     inference_state=inference_state,
                     frame_idx=annotation_frame_idx,
@@ -1227,7 +1254,6 @@ class SeCVideoSegmentation:
                     max_frame_num_to_track=max_frames_to_track,
                     reverse=False,
                     init_mask=init_mask,
-                    tokenizer=None,
                     mllm_memory_size=mllm_memory_size,
                 ):
                     video_segments[out_frame_idx] = {
@@ -1260,7 +1286,6 @@ class SeCVideoSegmentation:
                     max_frame_num_to_track=max_frames_to_track,
                     reverse=True,
                     init_mask=init_mask,
-                    tokenizer=None,
                     mllm_memory_size=mllm_memory_size,
                 ):
                     if out_frame_idx not in video_segments:
@@ -1276,7 +1301,6 @@ class SeCVideoSegmentation:
                     max_frame_num_to_track=max_frames_to_track,
                     reverse=reverse,
                     init_mask=init_mask,
-                    tokenizer=None,
                     mllm_memory_size=mllm_memory_size,
                 ):
                     video_segments[out_frame_idx] = {
