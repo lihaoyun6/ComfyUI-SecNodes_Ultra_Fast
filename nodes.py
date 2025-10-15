@@ -811,10 +811,15 @@ class SeCVideoSegmentation:
             for component in main_components:
                 if hasattr(model, component):
                     try:
-                        # Move to CPU first if it's a model component
+                        # Try to move to CPU first if it's a model component
+                        # Skip if quantized (AffineQuantizedTensor doesn't support .to() operations)
                         comp = getattr(model, component)
                         if hasattr(comp, 'cpu'):
-                            comp.cpu()
+                            try:
+                                comp.cpu()
+                            except (RuntimeError, NotImplementedError) as cpu_error:
+                                # Quantized models may fail .cpu() - safe to skip since we're deleting anyway
+                                pass
                         delattr(model, component)
                         components_deleted.append(component)
                     except Exception as e:
