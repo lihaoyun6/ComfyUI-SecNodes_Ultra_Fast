@@ -14,7 +14,22 @@ from .inference.configuration_sec import SeCConfig
 from .inference.modeling_sec import SeCModel
 from transformers import AutoTokenizer
 from pathlib import Path
+from accelerate import init_empty_weights, load_checkpoint_and_dispatch, infer_auto_device_map
+from accelerate.utils import get_balanced_memory
 
+def get_device_list():
+    devs = ["auto"]
+    try:
+        if hasattr(torch, "cuda") and hasattr(torch.cuda, "is_available") and torch.cuda.is_available():
+            devs += [f"cuda:{i}" for i in range(torch.cuda.device_count())]
+    except Exception:
+        pass
+    try:
+        if hasattr(torch, "mps") and hasattr(torch.mps, "is_available") and torch.mps.is_available():
+            devs += [f"mps:{i}" for i in range(torch.mps.device_count())]
+    except Exception:
+        pass
+    return devs+["cpu"]
 
 def get_gpu_compute_capability():
     """
@@ -209,12 +224,7 @@ class SeCModelLoader:
     @classmethod
     def INPUT_TYPES(cls):
         # Dynamically build device list based on available GPUs
-        device_choices = ["auto", "cpu"]
-
-        if torch.cuda.is_available():
-            gpu_count = torch.cuda.device_count()
-            for i in range(gpu_count):
-                device_choices.append(f"gpu{i}")
+        device_choices = get_device_list()
 
         # Dynamically scan for available models
         available_models = get_available_sec_models()
@@ -230,14 +240,25 @@ class SeCModelLoader:
                     "tooltip": "Select SeC model file. Each file has a native precision that will be used automatically."
                 }),
                 "device": (device_choices, {
-                    "default": "auto",
-                    "tooltip": "Device: auto (gpu0 if available, else CPU), cpu, gpu0/gpu1/etc (specific GPU)"
+                    "default": device_choices[0],
+                    "tooltip": "Device to load the weights, default: auto (CUDA if available, else CPU)"
                 })
             },
             "optional": {
                 "use_flash_attn": ("BOOLEAN", {
                     "default": True,
                     "tooltip": "Enable Flash Attention 2 for faster inference. Automatically disabled for float32 precision."
+                }),
+                "enable_cpu_offload": ("BOOLEAN", {
+                    "default": True,
+                    "tooltip": "Enables CPU offloading (block swapping) to save VRAM, but is little slower."
+                }),
+                "vram_limit": ("INT", {
+                    "default": 0,
+                    "min": 0,
+                    "max": 255,
+                    "step": 1,
+                    "tooltip": "VRAM usage limit in GB (0 = Auto)\nThis is a reference value, not an absolute value!"
                 }),
                 "allow_mask_overlap": ("BOOLEAN", {
                     "default": True,
@@ -252,7 +273,7 @@ class SeCModelLoader:
     CATEGORY = "SeC"
     TITLE = "SeC Model Loader"
 
-    def load_model(self, model_file, device, use_flash_attn=True, allow_mask_overlap=True):
+    def load_model(self, model_file, device, use_flash_attn=True, enable_cpu_offload=True, vram_limit=0, allow_mask_overlap=True):
         """Load SeC model"""
 
         # Get available models and find the selected one
@@ -280,26 +301,11 @@ class SeCModelLoader:
         precision_str = selected_model['precision']
 
         print(f"Loading SeC model: {os.path.basename(model_path) if is_single_file else 'SeC-4B (sharded)'} [{precision_str.upper()}]")
-
+        
         # Handle device selection
         if device == "auto":
             device = "cuda:0" if torch.cuda.is_available() else "cpu"
-        elif device.startswith("gpu"):
-            # Map gpu0 -> cuda:0, gpu1 -> cuda:1, etc.
-            try:
-                gpu_num = int(device[3:])  # Extract number after "gpu"
-                if torch.cuda.is_available():
-                    available_gpus = torch.cuda.device_count()
-                    if gpu_num >= available_gpus:
-                        raise ValueError(f"GPU {gpu_num} not available. System has {available_gpus} GPU(s) (0-{available_gpus-1})")
-                else:
-                    raise ValueError(f"CUDA not available but GPU device '{device}' was selected")
-                device = f"cuda:{gpu_num}"
-            except (ValueError, IndexError) as e:
-                if "invalid literal" in str(e):
-                    raise ValueError(f"Invalid GPU device format: '{device}'. Expected format: 'gpu0', 'gpu1', etc.")
-                raise
-
+    
         # Map model precision to torch dtype
         # Note: FP8 models are stored as FP8 but must be converted to FP16 for inference
         # due to PyTorch/cuDNN limitations with FP8 convolutions
@@ -343,37 +349,71 @@ class SeCModelLoader:
             config.hydra_overrides_extra = hydra_overrides_extra
 
             # Prepare for GPU loading
-            if device.startswith("cuda:"):
+            if device.startswith("cuda"):
                 import gc
                 gc.collect()
                 torch.cuda.empty_cache()
+                
+            if enable_cpu_offload:
+                print("CPU Offloading (Block Swap) enabled. Analyzing model structure...")
+                with init_empty_weights():
+                    temp_model_for_analysis = SeCModel(config, use_flash_attn=use_flash_attn, cpu_offload=enable_cpu_offload)
+                
+                max_memory = get_balanced_memory(
+                    temp_model_for_analysis,
+                    dtype=torch_dtype
+                )
+                
+                print(f"Set VRAM limit to {vram_limit}GiB...")
+                if vram_limit != 0:
+                    vram_limit = max(1,vram_limit-1)
+                    max_memory[0] = f"{vram_limit}GiB"
+                
+                device_map = infer_auto_device_map(
+                    temp_model_for_analysis,
+                    max_memory=max_memory,
+                    dtype=torch_dtype,
+                    no_split_module_classes = [
+                        "vision_model",
+                        "language_model.model.embed_tokens",
+                        "language_model.model.norm",
+                        "language_model.model.rotary_emb",
+                        "language_model.lm_head",
+                        "grounding_encoder",
+                        "mlp1",
+                        "text_hidden_fcs",
+                    ]
+                )
+                device_map['grounding_encoder'] = device_map['vision_model']
+                
+                print(f"Memory layout for offloading: {max_memory}")
+            else:
+                device_map = "auto" if device == "auto" else {"": device}
 
             # Load model differently based on format
             if is_single_file:
                 # Manual instantiation and weight loading for single-file models
-                model = SeCModel(config, use_flash_attn=use_flash_attn)
-                state_dict = load_file(model_path)
-
-                # Convert FP8 weights to FP16 if needed
-                if precision_str == "fp8":
-                    converted_state_dict = {}
-                    for key, tensor in state_dict.items():
-                        if tensor.dtype == torch.float8_e4m3fn:
-                            converted_state_dict[key] = tensor.to(torch.float16)
-                        else:
-                            converted_state_dict[key] = tensor
-                    state_dict = converted_state_dict
-
-                # Load state dict into model
-                model.load_state_dict(state_dict, strict=True)
-                model = model.eval()
-
-                # Move to target device and convert dtype if needed
-                if device.startswith("cuda:"):
-                    model = model.to(device=device, dtype=torch_dtype)
-                else:
-                    model = model.to(device="cpu", dtype=torch_dtype)
-
+                with init_empty_weights():
+                    model = SeCModel(config, use_flash_attn=use_flash_attn, cpu_offload=enable_cpu_offload)
+                
+                model = load_checkpoint_and_dispatch(
+                    model,
+                    model_path,
+                    device_map=device_map,
+                    dtype=torch_dtype,
+                    no_split_module_classes = [
+                        "vision_model",
+                        "language_model.model.embed_tokens",
+                        "language_model.model.norm",
+                        "language_model.model.rotary_emb",
+                        "language_model.lm_head",
+                        "grounding_encoder",
+                        "mlp1",
+                        "text_hidden_fcs",
+                    ]
+                )
+                
+                model.eval()
             else:
                 # Directory-based loading for sharded models (original approach)
                 load_kwargs = {
@@ -382,11 +422,9 @@ class SeCModelLoader:
                     "use_flash_attn": use_flash_attn,
                 }
 
-                if device.startswith("cuda:"):
-                    load_kwargs["device_map"] = {"": device}  # Force to specific GPU
-                    load_kwargs["low_cpu_mem_usage"] = True
-                else:
-                    load_kwargs["low_cpu_mem_usage"] = True
+                load_kwargs["device_map"] = device_map
+                load_kwargs["cpu_offload"] = enable_cpu_offload
+                load_kwargs["low_cpu_mem_usage"] = True
 
                 model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
 
@@ -443,7 +481,7 @@ class SeCModelLoader:
                         module.register_forward_pre_hook(dtype_conversion_hook, with_kwargs=True)
 
             # Apply FP8 weight-only quantization if applicable (after model is on device)
-            if device.startswith("cuda:"):
+            if device.startswith("cuda"):
                 apply_fp8_weight_only_quantization(model, precision_str)
 
             print(f"✓ Model loaded on {device}")
@@ -455,6 +493,8 @@ class SeCModelLoader:
                 'config_path': config_path,
                 'torch_dtype': torch_dtype,
                 'device': device,
+                'device_map': device_map,
+                'enable_cpu_offload': enable_cpu_offload,
                 'use_flash_attn': use_flash_attn,
                 'allow_mask_overlap': allow_mask_overlap,
                 'config': config,
@@ -488,12 +528,12 @@ class SeCVideoSegmentation:
             },
             "optional": {
                 "positive_points": ("STRING", {
-                    "default": "",
-                    "tooltip": "Positive click coordinates as JSON: '[{\"x\": 63, \"y\": 782}]'"
+                    "tooltip": "Positive click coordinates as JSON: '[{\"x\": 63, \"y\": 782}]'",
+                    "forceInput": True
                 }),
                 "negative_points": ("STRING", {
-                    "default": "",
-                    "tooltip": "Negative click coordinates as JSON: '[{\"x\": 100, \"y\": 200}]'"
+                    "tooltip": "Negative click coordinates as JSON: '[{\"x\": 100, \"y\": 200}]'",
+                    "forceInput": True
                 }),
                 "bbox": ("BBOX", {
                     "tooltip": "Bounding box as (x_min, y_min, x_max, y_max) or (x, y, width, height) tuple. Compatible with KJNodes Points Editor bbox output."
@@ -751,36 +791,6 @@ class SeCVideoSegmentation:
 
         mask_tensor = torch.from_numpy(mask_array.astype(np.float32))
         return mask_tensor
-    
-    def save_frames_temporarily(self, pil_images, temp_dir=None):
-        """Save frames temporarily for video processing"""
-        import tempfile
-
-        # Use system temp directory for cross-platform compatibility
-        if temp_dir is None:
-            temp_base = tempfile.gettempdir()
-            temp_dir = os.path.join(temp_base, "sec_frames")
-
-        os.makedirs(temp_dir, exist_ok=True)
-
-        # Clean up old files safely
-        try:
-            for file in os.listdir(temp_dir):
-                if file.endswith(('.jpg', '.png')):
-                    try:
-                        os.remove(os.path.join(temp_dir, file))
-                    except (PermissionError, OSError) as e:
-                        print(f"Warning: Could not remove old frame file {file}: {e}")
-        except Exception as e:
-            print(f"Warning: Error during temp directory cleanup: {e}")
-
-        frame_paths = []
-        for i, img in enumerate(pil_images):
-            frame_path = os.path.join(temp_dir, f"{i:05d}.jpg")
-            img.save(frame_path, 'JPEG', quality=95)
-            frame_paths.append(frame_path)
-
-        return temp_dir, frame_paths
 
     def _cleanup_model_memory(self, model):
         """
@@ -882,13 +892,15 @@ class SeCVideoSegmentation:
             # Extract metadata
             torch_dtype = metadata['torch_dtype']
             device = metadata['device']
+            device_map = metadata['device_map']
+            enable_cpu_offload = metadata['enable_cpu_offload']
             use_flash_attn = metadata['use_flash_attn']
             allow_mask_overlap = metadata['allow_mask_overlap']
             model_path = metadata['model_path']
             config_path = metadata.get('config_path', model_path)  # Fallback for old metadata
             is_single_file = metadata.get('is_single_file', False)  # Fallback for old metadata
             hydra_overrides_extra = metadata['hydra_overrides_extra']
-
+            
             # Recreate config fresh to avoid any stored state issues
             # Use config_path which points to repo config for single files
             from .inference.configuration_sec import SeCConfig
@@ -899,7 +911,7 @@ class SeCVideoSegmentation:
             from .inference.modeling_sec import SeCModel
             from transformers import AutoTokenizer
 
-            if device.startswith("cuda:"):
+            if device.startswith("cuda"):
                 import gc
                 gc.collect()
                 torch.cuda.empty_cache()
@@ -912,32 +924,33 @@ class SeCVideoSegmentation:
                 precision_str = "fp32"
             elif "bf16" in model_path.lower():
                 precision_str = "bf16"
-
+            
+            if enable_cpu_offload:
+                print("CPU Offloading (Block Swap) enabled.")
+            
             # Load model based on format
             if is_single_file:
-                # Manual instantiation for single-file models
-                fresh_model = SeCModel(config, use_flash_attn=use_flash_attn)
-                state_dict = load_file(model_path)
-
-                # Convert FP8 weights to FP16 if needed (same as initial load)
-                if precision_str == "fp8":
-                    converted_state_dict = {}
-                    for key, tensor in state_dict.items():
-                        if tensor.dtype == torch.float8_e4m3fn:
-                            converted_state_dict[key] = tensor.to(torch.float16)
-                        else:
-                            converted_state_dict[key] = tensor
-                    state_dict = converted_state_dict
-
-                fresh_model.load_state_dict(state_dict, strict=True)
+                with init_empty_weights():
+                    fresh_model = SeCModel(config, use_flash_attn=use_flash_attn, cpu_offload=enable_cpu_offload)
+                
+                fresh_model = load_checkpoint_and_dispatch(
+                    fresh_model,
+                    model_path,
+                    device_map=device_map,
+                    dtype=torch_dtype,
+                    no_split_module_classes = [
+                        "vision_model",
+                        "language_model.model.embed_tokens",
+                        "language_model.model.norm",
+                        "language_model.model.rotary_emb",
+                        "language_model.lm_head",
+                        "grounding_encoder",
+                        "mlp1",
+                        "text_hidden_fcs",
+                    ]
+                )
+                
                 fresh_model = fresh_model.eval()
-
-                # Move to device and convert dtype
-                if device.startswith("cuda:"):
-                    fresh_model = fresh_model.to(device=device, dtype=torch_dtype)
-                else:
-                    fresh_model = fresh_model.to(device="cpu", dtype=torch_dtype)
-
             else:
                 # Directory-based loading for sharded models
                 load_kwargs = {
@@ -946,19 +959,17 @@ class SeCVideoSegmentation:
                     "use_flash_attn": use_flash_attn,
                 }
 
-                if device.startswith("cuda:"):
-                    load_kwargs["device_map"] = {"": device}
-                    load_kwargs["low_cpu_mem_usage"] = True
-                else:
-                    load_kwargs["low_cpu_mem_usage"] = True
+                load_kwargs["device_map"] = device_map
+                load_kwargs["cpu_offload"] = enable_cpu_offload
+                load_kwargs["low_cpu_mem_usage"] = True
 
                 fresh_model = SeCModel.from_pretrained(model_path, **load_kwargs).eval()
 
             # Convert to target dtype
-            if device.startswith("cuda") and torch_dtype != torch.float32:
-                fresh_model = fresh_model.to(dtype=torch_dtype)
-            elif device == "cpu":
-                fresh_model = fresh_model.to(dtype=torch_dtype)
+            #if device.startswith("cuda") and torch_dtype != torch.float32:
+            #    fresh_model = fresh_model.to(dtype=torch_dtype)
+            #elif device == "cpu":
+            #    fresh_model = fresh_model.to(dtype=torch_dtype)
 
             # Set up tokenizer (use config_path for single files)
             tokenizer = AutoTokenizer.from_pretrained(config_path, trust_remote_code=True)
@@ -1012,7 +1023,7 @@ class SeCVideoSegmentation:
                         module.register_forward_pre_hook(dtype_conversion_hook, with_kwargs=True)
 
             # Apply FP8 weight-only quantization if applicable (after model is on device)
-            if device.startswith("cuda:"):
+            if device.startswith("cuda"):
                 apply_fp8_weight_only_quantization(fresh_model, precision_str)
 
             # Copy all attributes from fresh model to original model
@@ -1092,11 +1103,7 @@ class SeCVideoSegmentation:
                 "positive_points, negative_points, bbox, or input_mask"
             )
 
-        video_dir = None  # Track for cleanup
         try:
-            pil_images = self.tensor_to_pil_images(frames)
-            video_dir, frame_paths = self.save_frames_temporarily(pil_images)
-
             # Automatically set offload_state_to_cpu based on model device
             try:
                 offload_state_to_cpu = str(model.device) == "cpu"
@@ -1105,7 +1112,7 @@ class SeCVideoSegmentation:
                 offload_state_to_cpu = False
 
             inference_state = model.grounding_encoder.init_state(
-                video_path=video_dir,
+                video_path=frames,
                 offload_video_to_cpu=offload_video_to_cpu,
                 offload_state_to_cpu=offload_state_to_cpu
             )
@@ -1248,7 +1255,7 @@ class SeCVideoSegmentation:
                 raise ValueError(error_msg)
 
             if max_frames_to_track == -1:
-                max_frames_to_track = len(pil_images)
+                max_frames_to_track = len(frames)
 
             video_segments = {}
             
@@ -1315,7 +1322,7 @@ class SeCVideoSegmentation:
             
             # Create output masks for all input frames
             # Frames not in video_segments get empty masks
-            num_frames = len(pil_images)
+            num_frames = len(frames)
             output_masks = []
             output_obj_ids = []
 
@@ -1342,14 +1349,7 @@ class SeCVideoSegmentation:
 
         finally:
             # Cleanup: Always remove temp directory and clear cache
-            import shutil
             import gc
-
-            if video_dir is not None and os.path.exists(video_dir):
-                try:
-                    shutil.rmtree(video_dir)
-                except Exception as e:
-                    print(f"Warning: Failed to clean up temp directory {video_dir}: {e}")
 
             # Model cleanup - move to CPU if requested
             if auto_unload_model:

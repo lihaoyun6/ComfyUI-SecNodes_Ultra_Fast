@@ -6,6 +6,7 @@ import torch.distributed
 from torch import nn
 import torch.nn.functional as F
 
+from PIL import Image
 from torch.nn.init import trunc_normal_
 from tqdm import tqdm
 
@@ -144,18 +145,28 @@ class SAM2VideoPredictor(_SAM2VideoPredictor):
 
     def init_state(self, video_path, **kwargs):
         inference_state = super().init_state(video_path=video_path, **kwargs)
-        frame_names = [
-            os.path.splitext(p)[0]
-            for p in os.listdir(video_path)
-            if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG"]
-        ]
-        frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
-        inference_state["video_paths"] = [
-            os.path.join(video_path, f"{frame_name}.jpg")
-            for frame_name in frame_names
-        ]
+        is_str = isinstance(video_path, str)
+        is_tensor = isinstance(video_path, torch.Tensor)
+        if is_str:
+            frame_names = [
+                os.path.splitext(p)[0]
+                for p in os.listdir(video_path)
+                if os.path.splitext(p)[-1] in [".jpg", ".jpeg", ".JPG", ".JPEG"]
+            ]
+            frame_names.sort(key=lambda p: int(os.path.splitext(p)[0]))
+            inference_state["video_paths"] = [
+                os.path.join(video_path, f"{frame_name}.jpg")
+                for frame_name in frame_names
+            ]
+            inference_state["video_is_paths"] = True
+        elif is_tensor:
+            numpy_frames = (video_path.cpu().clamp(0, 1) * 255).to(torch.uint8).numpy()
+            pil_images = [Image.fromarray(frame, 'RGB') for frame in numpy_frames]
+            inference_state["video_paths"] = pil_images
+            inference_state["video_is_paths"] = False
+        else:
+            raise TypeError(f"Unsupported input type for SAM2VideoPredictor: {type(video_path)}")
         return inference_state
-    
     def _prepare_memory_conditioned_features(
         self,
         frame_idx,

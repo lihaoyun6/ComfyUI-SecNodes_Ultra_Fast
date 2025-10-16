@@ -7,6 +7,9 @@ import os
 import warnings
 from typing import Any, List, Optional, Tuple, Union
 
+import comfy.utils
+from comfy.model_management import processing_interrupted
+
 import torchvision.transforms as T
 from torchvision.transforms.functional import InterpolationMode
 
@@ -102,7 +105,7 @@ class SeCModel(PreTrainedModel):
     _supports_flash_attn_2 = True
     supports_gradient_checkpointing = True
 
-    def __init__(self, config: SeCConfig, vision_model=None, language_model=None, use_flash_attn=True):
+    def __init__(self, config: SeCConfig, vision_model=None, language_model=None, use_flash_attn=True, cpu_offload=False):
         super().__init__(config)
 
         assert version_cmp(transformers.__version__, '4.37.0', 'ge')
@@ -117,6 +120,7 @@ class SeCModel(PreTrainedModel):
         self.ps_version = config.ps_version
         self.llm_arch_name = config.llm_config.architectures[0]
 
+        self.cpu_offload = cpu_offload
         use_flash_attn = use_flash_attn if has_flash_attn else False
         config.vision_config.use_flash_attn = True if use_flash_attn else False
         config.llm_config._attn_implementation = 'flash_attention_2' if use_flash_attn else 'eager'
@@ -457,11 +461,12 @@ class SeCModel(PreTrainedModel):
                 else self.tokenizer.eos_token_id
             ),
         )
-
+        
         self.gen_config = GenerationConfig(**default_generation_kwargs)
         self.init_prediction_config = True
         self.torch_dtype = torch_dtype
-        self.to(torch_dtype)
+        if not self.cpu_offload:
+            self.to(torch_dtype)
         self.extra_image_processor = DirectResize(target_length=1024, )
         self.min_dynamic_patch = 1
         self.max_dynamic_patch = 12
@@ -516,6 +521,7 @@ class SeCModel(PreTrainedModel):
         obj_ids = inference_state["obj_ids"]
         num_frames = inference_state["num_frames"]
         video_paths = inference_state["video_paths"]
+        video_is_paths = inference_state["video_is_paths"]
 
         batch_size = self.grounding_encoder._get_obj_num(inference_state)
 
@@ -543,8 +549,13 @@ class SeCModel(PreTrainedModel):
 
         mllm_memory = [(start_frame_idx, init_mask)]
         frame_cache = {}
-
+        pbar = comfy.utils.ProgressBar(len(processing_order))
+        
+        pbar_idx = 0
         for frame_idx in tqdm(processing_order, desc="propagate in video"):
+            if processing_interrupted():
+                return (None, None, None)
+          
             _update_flag = False
             if frame_idx in consolidated_frame_inds["cond_frame_outputs"]:
                 storage_key = "cond_frame_outputs"
@@ -572,11 +583,17 @@ class SeCModel(PreTrainedModel):
                 }
 
                 if frame_idx not in frame_cache:
-                    frame_cache[frame_idx] = Image.open(video_paths[frame_idx]).convert('RGB')
+                    if video_is_paths:
+                      frame_cache[frame_idx] = Image.open(video_paths[frame_idx]).convert('RGB')
+                    else:
+                        frame_cache[frame_idx] = video_paths[frame_idx]
                 current_img = frame_cache[frame_idx]
 
                 if frame_idx - 1 not in frame_cache:
-                    frame_cache[frame_idx - 1] = Image.open(video_paths[frame_idx-1]).convert('RGB')
+                    if video_is_paths:
+                      frame_cache[frame_idx - 1] = Image.open(video_paths[frame_idx - 1]).convert('RGB')
+                    else:
+                      frame_cache[frame_idx - 1] = video_paths[frame_idx - 1]
                 last_img = frame_cache[frame_idx - 1]
                 flags = [is_scene_change_hsv(current_img, last_img)]
                 if len(mllm_memory) > mllm_memory_size:
@@ -592,13 +609,15 @@ class SeCModel(PreTrainedModel):
                     video = []
                     for mem_frame_idx, mem_mask in _mllm_memory:
                         if mem_frame_idx not in frame_cache:
-                            frame_cache[mem_frame_idx] = Image.open(video_paths[mem_frame_idx]).convert('RGB')
+                            if video_is_paths:
+                              frame_cache[mem_frame_idx] = Image.open(video_paths[mem_frame_idx]).convert('RGB')
+                            else:
+                                frame_cache[mem_frame_idx] = video_paths[mem_frame_idx]
                         video.append(label_img_with_mask(frame_cache[mem_frame_idx], mem_mask))
                     video.append(current_img)
                     text = "<image>Please segment the object in the last frame based on the object labeled in the first several images."
                     specific_language_embd = self.predict_forward(video=video, text=text)
                     language_embd = specific_language_embd.unsqueeze(0)
-
 
                 current_out, pred_masks = self.grounding_encoder._run_single_frame_inference(
                     **inference_params, language_embd=language_embd
@@ -628,7 +647,9 @@ class SeCModel(PreTrainedModel):
                 oldest_frame = min(frame_cache.keys())
                 if oldest_frame < frame_idx - 5:
                     del frame_cache[oldest_frame]
-
+            
+            pbar_idx += 1
+            pbar.update(pbar_idx)
             yield frame_idx, obj_ids, video_res_masks
         
     def predict_forward(

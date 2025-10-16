@@ -1,15 +1,27 @@
-# ComfyUI SeC Nodes
+# ComfyUI SeC Nodes Ultra Fast
 
-ComfyUI custom nodes for **SeC (Segment Concept)** - State-of-the-art video object segmentation that outperforms SAM 2.1, utilizing the SeC-4B model developed by OpenIXCLab.
+ComfyUI custom nodes for **SeC (Segment Concept)** - State-of-the-art video object segmentation that outperforms SAM 2.1, utilizing the SeC-4B model developed by OpenIXCLab.  
+> For installation and model downloads, please scroll down.
+
+[\[📄 中文版\]](./README_zh.md)
 
 ## Changelog
+
+### 🎉v1.2\_ultra\_fast (2025-10-16) - Experience VRAM control and speed improvements
+
+**New Features:**
+
+- **Very low VRAM requirements**: Run SeC-4B_FP16 on >= 3GB of VRAM without slowdown  
+- **No disk cache required**: Stop using disk caching and keep the processing entirely in memory  
+- **High-speed weight loading**: 10x fast weight loading (100s -> 10s)  
 
 ### v1.1 (2025-10-13) - Single-File Models & FP8 Support
 
 **New Features:**
+
 - **Single-file model formats**: Download just one file instead of sharded 4-file format
   - FP16 (7.35GB) - Recommended default
-  - FP8 (3.97GB) - VRAM-constrained systems (RTX 30+ required): **CURRENTLY HAS SCENE CHANGE DETECTION PROBLEMS**
+  - FP8 (3.97GB) - VRAM-constrained systems (RTX 30+ required)
   - BF16 (7.35GB) - Alternative to FP16
   - FP32 (14.14GB) - Full precision
 - **FP8 quantization support**: Automatic weight-only quantization (W8A16) using torchao + Marlin kernels
@@ -18,12 +30,13 @@ ComfyUI custom nodes for **SeC (Segment Concept)** - State-of-the-art video obje
   - Automatic fallback to FP16 on older GPUs
 
 **Changes:**
+
 - Model loader now supports multiple precision formats with auto-detection. Retains compatibility with sharded model.
 - Added `torchao>=0.1.0` to requirements.txt for FP8 support
 - Automatic GPU capability detection for FP8 compatibility
 - Node package added to ComfyUI-Manager for easy install
 
-**Download:** New single-file models available at [https://huggingface.co/VeryAladeen/Sec-4B](https://huggingface.co/VeryAladeen/Sec-4B)
+**Download:** New single-file models available at [https://huggingface.co/VeryAladeen/Sec-4B](https://huggingface.co/VeryAladeen/Sec-4B/tree/main)
 
 ## What is SeC?
 
@@ -74,11 +87,13 @@ https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
 
 3. **Install SeC Nodes**:
    - Open ComfyUI Manager in ComfyUI
-   - Search for **"SeC"** or **"SecNodes"**
-   - Click **Install**
-   - Click **Restart** when prompted
+   - Click "Install via Git URL"
+   - Paste `https://github.com/9nate-drake/Comfyui-SecNodes` into text box  
+   - Click "Confirm" to install
 
 4. **Done!** The SeC nodes will appear in the "SeC" category
+
+---
 
 ### Option 2: Manual Installation
 
@@ -91,21 +106,23 @@ git clone https://github.com/9nate-drake/Comfyui-SecNodes
 #### Step 2: Install Dependencies
 
 **ComfyUI Portable (Windows):**
+
 ```bash
 cd ComfyUI/custom_nodes/Comfyui-SecNodes
 ../../python_embeded/python.exe -m pip install -r requirements.txt
 ```
 
 **Standard Python Installation (Linux/Mac):**
+
 ```bash
 cd ComfyUI/custom_nodes/Comfyui-SecNodes
 pip install -r requirements.txt
 ```
 
 #### Step 3: Restart ComfyUI
+
 The nodes will appear in the "SeC" category.
 
----
 
 ## Model Download
 
@@ -113,18 +130,18 @@ The nodes will appear in the "SeC" category.
 
 The SeC Model Loader will automatically detect and let you select which model to use. Download from [https://huggingface.co/VeryAladeen/Sec-4B](https://huggingface.co/VeryAladeen/Sec-4B) and place in your `ComfyUI/models/sams/` folder:
 
-- **SeC-4B-fp16.safetensors** (Recommended) - 7.35 GB
+- 👍🏻**SeC-4B-fp16.safetensors** (Recommended) - 7.35 GB
   - Best balance of quality and size
   - Works on all CUDA GPUs
-- **SeC-4B-fp8.safetensors** (VRAM-Constrained) - 3.97 GB
-  - **Only use if VRAM limited** (10-12GB systems)
-  - Saves 1.5-2GB VRAM vs FP16 (not 50% - see [note](#understanding-fp8-vram-savings) below)
-  - **Requires RTX 30 series or newer** for VRAM savings
-  - Older GPUs: Falls back to FP16 (you still save on download size)
+  - With auto CPU offload, you can run it on >=3GB of VRAM  
+- ~~**SeC-4B-fp8.safetensors** - 3.97 GB~~
+  - *Deprecated*
 - **SeC-4B-bf16.safetensors** (Alternative) - 7.35 GB
   - Alternative to FP16, better for some GPUs
 - **SeC-4B-fp32.safetensors** (Full Precision) - 14.14 GB
   - Maximum precision, highest VRAM usage
+
+---
 
 #### Alternative: Original Sharded Model
 
@@ -141,6 +158,7 @@ git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
 ```
 
 **Details:**
+
 - Size: ~14.14 GB (sharded into 4 files)
 - Precision: FP32
 - Includes all config files in the download
@@ -152,15 +170,18 @@ git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
 - **PyTorch**: 2.6.0+ (included with ComfyUI)
 - **CUDA**: 11.8+ for GPU acceleration
 - **CUDA GPU**: Recommended (CPU supported but significantly slower)
-- **VRAM**: See GPU VRAM recommendations below
+- **VRAM**: at last 3GB VRAM + 6GB RAM required
+  - Enabling `enable_cpu_offload` to save VRAM, use it with `vram_limit` to further reduce VRAM usage.
   - Can reduce significantly by enabling `offload_video_to_cpu` (~3% speed penalty)
 
 **Note on CPU Mode:**
+
 - CPU inference automatically uses float32 precision (bfloat16/float16 not supported on CPU)
 - Expect significantly slower performance compared to GPU (~10-20x slower depending on hardware)
 - Not recommended for production use, mainly for testing or systems without GPUs
 
 **Flash Attention 2 (Optional):**
+
 - Provides ~2x speedup but requires specific hardware
 - **GPU Requirements**: Ampere/Ada/Hopper architecture only (RTX 30/40 series, A100, H100)
   - Does NOT work on RTX 20 series (Turing) or older GPUs
@@ -170,43 +191,7 @@ git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
 
 ## GPU VRAM Recommendations
 
-| VRAM | Resolution | Frames | Model | Key Settings | Performance |
-|------|-----------|--------|-------|--------------|-------------|
-| **10-12GB** | 256x256 - 512x384 | Up to 100 | **FP8 only**<br>(RTX 30+ required) | `offload_video_to_cpu: True`<br>`mllm_memory_size: 5-10`<br>**Minimum viable config** | 6-10 it/s |
-| **16-20GB** | 512x384 - 720p | 100-500 | **FP16 recommended** | Default settings work well<br>`mllm_memory_size: 12-15`<br>FP8 optional (saves 1.5-2GB) | 5-6 it/s |
-| **24GB+** | 720p - 1080p+ | 500+ | **FP16 recommended** | `mllm_memory_size: 15-20` for max quality<br>FP8 not needed | 4-5 it/s |
-
-**Quick Tips:**
-- **FP16 is the default recommendation** - better compatibility, easier to use
-- **FP8 is for VRAM-constrained systems only** (10-12GB GPUs)
-- Low on VRAM? Enable `offload_video_to_cpu` (saves 2-3GB, only ~3% slower)
-- Lower `mllm_memory_size` (5-10) if you need to squeeze into limited VRAM
-
-### Understanding FP8 VRAM Savings
-
-NOTE: **CURRENTLY HAS SCENE CHANGE DETECTION PROBLEMS**
-
-**Real-world FP8 savings: 1.5-2GB VRAM (not 50%)**
-
-FP8 quantization reduces model weight storage, but total VRAM usage also includes:
-- **Inference activations** (unchanged by quantization): 1-2GB
-- **SAM2 tracking states** (unchanged): 1-2GB
-- **Video frame buffers** (unchanged): 300-500MB
-- **Model weights** (reduced by FP8): ~3GB savings
-
-**Result:** 17GB → 15GB (2GB saved) in real-world video segmentation workloads.
-
-**Hardware Requirements:**
-- **RTX 30 series or newer** (Ampere/Ada/Hopper architecture)
-- Older GPUs: FP8 model falls back to FP16 inference automatically
-- You still save on download size (3.97GB vs 7.35GB)
-
-**When to use FP8:**
-- ✅ 10-12GB VRAM systems (with `offload_video_to_cpu`)
-- ✅ You have RTX 30 series or newer
-- ❌ 16GB+ VRAM - use FP16 instead with 'offload_video_to_cpu'
-- ❌ RTX 20 series or older - no VRAM benefit (but smaller download)
-
+Based on a highly optimized automatic VRAM offloading mechanism, any GPU with more than 3 GB of VRAM can smoothly run SeC-4B video segmentation.  
 
 ## Nodes Reference
 
@@ -216,23 +201,21 @@ Load and configure the SeC model for inference. Automatically detects available 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | **model_file** | CHOICE | First available | Select which model to load:<br>• FP32 (Full Precision - ~14.5GB)<br>• FP16 (Half Precision - 7.35GB)<br>• BF16 (Brain Float - ~7GB)<br>• FP8 (8-bit Float - 3.97GB)<br>• SeC-4B (Sharded/Original - ~14GB)<br>**Note:** Each model uses its native precision automatically |
-| **device** | CHOICE | `auto` | Device selection (dynamically detects available GPUs):<br>• `auto`: gpu0 if available, else CPU (recommended)<br>• `cpu`: Force CPU (automatically converts to float32)<br>• `gpu0`, `gpu1`, etc.: Specific GPU |
+| **device** | CHOICE | `auto` | Device selection (dynamically detects available GPUs):<br>• `auto`: `cuda:0` if available, else CPU (recommended)<br>• `cpu`: Force CPU (automatically converts to float32)<br>• `cuda:0`, `cuda:1`, etc.: Specific GPU |
 | *use_flash_attn* | BOOLEAN | True | Enable Flash Attention 2 for faster inference.<br>**Note:** Automatically disabled for FP32/FP8 precision (requires FP16/BF16) |
+| *enable_cpu_offload* | BOOLEAN | True | Enables CPU offloading (block swapping) to save VRAM |
+| *vram_limit* | INT | 0 | VRAM usage limit in GB (0 = Auto) This is a reference value, not an absolute value! |
 | *allow_mask_overlap* | BOOLEAN | True | Allow objects to overlap (disable for strict separation) |
 
 **Outputs:** `model`
 
 **Notes:**
+
 - **Model Selection**: Dynamically shows available models in `ComfyUI/models/sams/` directory
   - Download at least one model format (see Model Download section above)
   - Models are loaded in their **native precision** (FP8 stays FP8, no upconversion!)
   - This preserves all memory benefits of smaller model formats
 - **Config files**: Bundled in this repo - no separate download needed for single-file models
-- **Device options dynamically adapt** to your system:
-  - 1 GPU system: Shows `auto`, `cpu`, `gpu0`
-  - 2 GPU system: Shows `auto`, `cpu`, `gpu0`, `gpu1`
-  - 3+ GPU system: Shows all available GPUs
-  - No GPU: Shows only `auto` and `cpu`
 - **CPU mode**: Automatically converts model to float32 precision (CPU limitation). CPU inference is significantly slower than GPU (~10-20x).
 - **Flash Attention**: Automatically disabled for FP32 and FP8 models (requires FP16/BF16). Standard attention will be used instead.
 
@@ -260,6 +243,7 @@ Segment and track objects across video frames.
 **Outputs:** `masks` (MASK), `object_ids` (INT)
 
 **Important Notes:**
+
 - Provide at least one visual prompt (points, bbox, or mask)
 - **Output always matches input frame count**: If you input 100 frames, you get 100 masks
 - Frames before/after the tracked range will have empty (blank) masks
@@ -282,12 +266,14 @@ You can combine different input types for powerful segmentation control:
 | **Mask + Positive + Negative** | Positive points inside mask refine the region, negative points exclude areas |
 
 **Example Use Cases:**
+
 - **Bbox + point refinement**: Draw bbox around a person, add point on their shirt to segment just the shirt instead of the whole person
 - **Rough mask + precise points**: Draw a rough mask around a person, then add positive points on their face to focus the segmentation
 - **Mask + negative exclusions**: Mask an object, add negative points on unwanted parts (e.g., exclude a hand from a person mask)
 - **Point filtering**: Positive points outside the mask boundary are automatically ignored, preventing accidental selections
 
 **⚠ Important Note on Negative Points with Masks:**
+
 - Negative points work best when placed **inside or near** the masked region
 - Negative points far outside the mask (>50 pixels away) may cause unexpected results or empty segmentation
 - You'll receive a warning in the console if negative points are too far from the mask
@@ -330,6 +316,7 @@ The `mllm_memory_size` parameter controls how many historical keyframes SeC's La
 - **Original research**: SeC paper used 7 and achieved SOTA performance (+11.8 over SAM 2.1), emphasizing "quality over quantity" of keyframes
 
 **Recommended Values:**
+
 - **Default (12)**: Balanced approach - higher than paper's 7 for extra context, but not excessive
 - **Low (5-7)**: Faster inference on simple videos, matches original research setup
 - **High (15-20)**: Maximum semantic context for very complex videos (no VRAM penalty)
@@ -355,12 +342,15 @@ This node implements the **SeC-4B** model developed by OpenIXCLab.
 
 
 **CUDA out of memory**:
+
+- Enabling `enable_cpu_offload` to save VRAM, use it with `vram_limit` to further reduce VRAM usage.
 - Enable `offload_video_to_cpu` (saves 2-3GB VRAM, only ~3% slower)
 - Also ensure you are using the fp8 variant for maximum VRAM saving
 - Process fewer frames at once (split video into smaller batches)
 - See GPU VRAM recommendations above for your hardware tier
 
 **Slow inference**:
+
 - Enable `use_flash_attn` in model loader (requires Flash Attention 2)
 - Disable `offload_video_to_cpu` if you have sufficient VRAM
 

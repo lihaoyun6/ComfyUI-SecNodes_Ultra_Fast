@@ -10,6 +10,7 @@ from threading import Thread
 
 import numpy as np
 import torch
+import torch.nn.functional as F
 from PIL import Image
 from tqdm import tqdm
 
@@ -241,6 +242,7 @@ def load_video_frames(
     Load the video frames from video_path. The frames are resized to image_size as in
     the model and are loaded to GPU if offload_video_to_cpu=False. This is used by the demo.
     """
+    is_tensor = isinstance(video_path, torch.Tensor)
     is_bytes = isinstance(video_path, bytes)
     is_str = isinstance(video_path, str)
     is_mp4_path = is_str and os.path.splitext(video_path)[-1] in [".mp4", ".MP4"]
@@ -263,9 +265,18 @@ def load_video_frames(
             async_loading_frames=async_loading_frames,
             compute_device=compute_device,
         )
+    elif is_tensor:
+        return load_video_frames_from_tensor(
+            video_tensor=video_path,
+            image_size=image_size,
+            offload_video_to_cpu=offload_video_to_cpu,
+            img_mean=img_mean,
+            img_std=img_std,
+            compute_device=compute_device,
+        )
     else:
         raise NotImplementedError(
-            "Only MP4 video and JPEG folder are supported at this moment"
+            "Only MP4 video, JPEG folder and torch.Tensor are supported at this moment!"
         )
 
 
@@ -367,6 +378,36 @@ def load_video_frames_from_video_file(
     images /= img_std
     return images, video_height, video_width
 
+def load_video_frames_from_tensor(
+    video_tensor,
+    image_size,
+    offload_video_to_cpu,
+    img_mean=(0.485, 0.456, 0.406),
+    img_std=(0.229, 0.224, 0.225),
+    compute_device=torch.device("cuda"),
+):
+    img_mean = torch.tensor(img_mean, dtype=torch.float32)[:, None, None]
+    img_std = torch.tensor(img_std, dtype=torch.float32)[:, None, None]
+    
+    video_height = video_tensor.shape[1]
+    video_width = video_tensor.shape[2]
+    
+    images = video_tensor.permute(0, 3, 1, 2)
+    if not offload_video_to_cpu:
+        images = images.to(compute_device)
+        img_mean = img_mean.to(compute_device)
+        img_std = img_std.to(compute_device)
+    
+    images = F.interpolate(
+        images, 
+        size=(image_size, image_size), 
+        mode='bilinear',
+        align_corners=False
+    )
+    
+    images -= img_mean
+    images /= img_std
+    return images, video_height, video_width
 
 def fill_holes_in_mask_scores(mask, max_area):
     """
