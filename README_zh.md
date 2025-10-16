@@ -88,7 +88,7 @@ https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
 3.  **安装 SeC 节点**:
     -   在 ComfyUI 中打开 ComfyUI Manager
     -   点击 "Install via Git URL"
-    -   将 `https://github.com/9nate-drake/Comfyui-SecNodes` 粘贴到文本框中
+    -   将 `https://github.com/lihaoyun6/ComfyUI-SecNodes_Ultra_Fast` 粘贴到文本框中
     -   点击 "确认" 进行安装
 
 4.  **完成!** SeC 节点将出现在 "SeC" 类别下

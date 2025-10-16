@@ -88,7 +88,7 @@ https://github.com/user-attachments/assets/9e99d55c-ba8e-4041-985e-b95cbd6dd066
 3. **Install SeC Nodes**:
    - Open ComfyUI Manager in ComfyUI
    - Click "Install via Git URL"
-   - Paste `https://github.com/9nate-drake/Comfyui-SecNodes` into text box  
+   - Paste `https://github.com/lihaoyun6/ComfyUI-SecNodes_Ultra_Fast` into text box  
    - Click "Confirm" to install
 
 4. **Done!** The SeC nodes will appear in the "SeC" category
