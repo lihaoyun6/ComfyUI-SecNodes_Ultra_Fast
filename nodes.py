@@ -384,7 +384,7 @@ class SeCModelLoader:
                         "text_hidden_fcs",
                     ]
                 )
-                device_map['grounding_encoder'] = device_map['vision_model']
+                device_map['grounding_encoder'] = next(iter(device_map.values()))
                 
                 print(f"Memory layout for offloading: {max_memory}")
             else:
