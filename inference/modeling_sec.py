@@ -550,8 +550,7 @@ class SeCModel(PreTrainedModel):
         mllm_memory = [(start_frame_idx, init_mask)]
         frame_cache = {}
         pbar = comfy.utils.ProgressBar(len(processing_order))
-        
-        pbar_idx = 0
+
         for frame_idx in tqdm(processing_order, desc="propagate in video"):
             if processing_interrupted():
                 return (None, None, None)
@@ -648,8 +647,7 @@ class SeCModel(PreTrainedModel):
                 if oldest_frame < frame_idx - 5:
                     del frame_cache[oldest_frame]
             
-            pbar_idx += 1
-            pbar.update(pbar_idx)
+            pbar.update(1)
             yield frame_idx, obj_ids, video_res_masks
         
     def predict_forward(
