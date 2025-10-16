@@ -9,7 +9,7 @@ ComfyUI custom nodes for **SeC (Segment Concept)** - State-of-the-art video obje
 **New Features:**
 - **Single-file model formats**: Download just one file instead of sharded 4-file format
   - FP16 (7.35GB) - Recommended default
-  - FP8 (3.97GB) - VRAM-constrained systems (RTX 30+ required)
+  - FP8 (3.97GB) - VRAM-constrained systems (RTX 30+ required): **CURRENTLY HAS SCENE CHANGE DETECTION PROBLEMS**
   - BF16 (7.35GB) - Alternative to FP16
   - FP32 (14.14GB) - Full precision
 - **FP8 quantization support**: Automatic weight-only quantization (W8A16) using torchao + Marlin kernels
@@ -183,6 +183,8 @@ git lfs clone https://huggingface.co/OpenIXCLab/SeC-4B
 - Lower `mllm_memory_size` (5-10) if you need to squeeze into limited VRAM
 
 ### Understanding FP8 VRAM Savings
+
+NOTE: **CURRENTLY HAS SCENE CHANGE DETECTION PROBLEMS**
 
 **Real-world FP8 savings: 1.5-2GB VRAM (not 50%)**
 
