@@ -583,16 +583,16 @@ class SeCModel(PreTrainedModel):
 
                 if frame_idx not in frame_cache:
                     if video_is_paths:
-                      frame_cache[frame_idx] = Image.open(video_paths[frame_idx]).convert('RGB')
+                        frame_cache[frame_idx] = Image.open(video_paths[frame_idx]).convert('RGB')
                     else:
                         frame_cache[frame_idx] = video_paths[frame_idx]
                 current_img = frame_cache[frame_idx]
 
                 if frame_idx - 1 not in frame_cache:
                     if video_is_paths:
-                      frame_cache[frame_idx - 1] = Image.open(video_paths[frame_idx - 1]).convert('RGB')
+                        frame_cache[frame_idx - 1] = Image.open(video_paths[frame_idx - 1]).convert('RGB')
                     else:
-                      frame_cache[frame_idx - 1] = video_paths[frame_idx - 1]
+                        frame_cache[frame_idx - 1] = video_paths[frame_idx - 1]
                 last_img = frame_cache[frame_idx - 1]
                 flags = [is_scene_change_hsv(current_img, last_img)]
                 if len(mllm_memory) > mllm_memory_size:
@@ -605,7 +605,10 @@ class SeCModel(PreTrainedModel):
                     video = []
                     for mem_frame_idx, mem_mask in _mllm_memory:
                         if mem_frame_idx not in frame_cache:
-                            frame_cache[mem_frame_idx] = Image.open(video_paths[mem_frame_idx]).convert('RGB')
+                            if video_is_paths:
+                                frame_cache[mem_frame_idx] = Image.open(video_paths[mem_frame_idx]).convert('RGB')
+                            else:
+                                frame_cache[mem_frame_idx] = video_paths[mem_frame_idx]
                         video.append(label_img_with_mask(frame_cache[mem_frame_idx], mem_mask))
                     video.append(current_img)
                     text = "<image>Please segment the object in the last frame based on the object labeled in the first several images."
