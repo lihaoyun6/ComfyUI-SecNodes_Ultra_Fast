@@ -600,23 +600,20 @@ class SeCModel(PreTrainedModel):
                 else:
                     _mllm_memory = mllm_memory
                 
-                if False in flags:
-                    _update_flag = False
-                    language_embd = None
-                else:
+                if True in flags:
                     _update_flag = True
                     video = []
                     for mem_frame_idx, mem_mask in _mllm_memory:
                         if mem_frame_idx not in frame_cache:
-                            if video_is_paths:
-                              frame_cache[mem_frame_idx] = Image.open(video_paths[mem_frame_idx]).convert('RGB')
-                            else:
-                                frame_cache[mem_frame_idx] = video_paths[mem_frame_idx]
+                            frame_cache[mem_frame_idx] = Image.open(video_paths[mem_frame_idx]).convert('RGB')
                         video.append(label_img_with_mask(frame_cache[mem_frame_idx], mem_mask))
                     video.append(current_img)
                     text = "<image>Please segment the object in the last frame based on the object labeled in the first several images."
                     specific_language_embd = self.predict_forward(video=video, text=text)
                     language_embd = specific_language_embd.unsqueeze(0)
+                else:
+                    _update_flag = False
+                    language_embd = None
 
                 current_out, pred_masks = self.grounding_encoder._run_single_frame_inference(
                     **inference_params, language_embd=language_embd
@@ -730,11 +727,11 @@ def label_img_with_mask(img, mask):
     return frame
 
 def is_scene_change_hsv(img1, img2, threshold=0.35):
-    img1 = cv2.resize(np.array(img1), (1024, 1024))
-    img2 = cv2.resize(np.array(img2), (1024, 1024))
+    img1 = cv2.resize(np.array(img1), (512, 512))
+    img2 = cv2.resize(np.array(img2), (512, 512))
 
-    hsv1 = cv2.cvtColor(img1, cv2.COLOR_BGR2HSV)
-    hsv2 = cv2.cvtColor(img2, cv2.COLOR_BGR2HSV)
+    hsv1 = cv2.cvtColor(img1, cv2.COLOR_RGB2HSV)
+    hsv2 = cv2.cvtColor(img2, cv2.COLOR_RGB2HSV)
 
     hist1 = cv2.calcHist([hsv1], [0, 1], None, [60, 80], [0, 180, 0, 256])
     hist2 = cv2.calcHist([hsv2], [0, 1], None, [60, 80], [0, 180, 0, 256])

@@ -20,8 +20,8 @@ NODE_CLASS_MAPPINGS = {
 }
 
 NODE_DISPLAY_NAME_MAPPINGS = {
-    "SeCModelLoader": "SeC Model Loader",
-    "SeCVideoSegmentation": "SeC Video Segmentation",
+    "SeCModelLoader": "SeC Model Loader Ultra-Fast",
+    "SeCVideoSegmentation": "SeC Video Segmentation Ultra-Fast",
     "CoordinatePlotter": "Coordinate Plotter",
 }
 
