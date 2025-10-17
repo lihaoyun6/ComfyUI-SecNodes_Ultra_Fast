@@ -4,18 +4,25 @@
 
 import torch
 import numpy as np
-from PIL import Image
 import folder_paths
 import os
 import sys
+import gc
+import re
+import json
+
+from PIL import Image, ImageDraw
 from safetensors.torch import load_file
 
 from .inference.configuration_sec import SeCConfig
 from .inference.modeling_sec import SeCModel
+
 from transformers import AutoTokenizer
 from pathlib import Path
 from accelerate import init_empty_weights, load_checkpoint_and_dispatch, infer_auto_device_map
 from accelerate.utils import get_balanced_memory
+
+from comfy.model_management import InterruptProcessingException
 
 def get_device_list():
     devs = ["auto"]
@@ -324,7 +331,6 @@ class SeCModelLoader:
 
             # Prepare for GPU loading
             if device.startswith("cuda:"):
-                import gc
                 gc.collect()
                 torch.cuda.empty_cache()
                 
@@ -338,10 +344,15 @@ class SeCModelLoader:
                     dtype=torch_dtype
                 )
                 
-                print(f"Set VRAM limit to {vram_limit}GiB...")
                 if vram_limit != 0:
+                    print(f"✓ Set VRAM limit to {vram_limit}GiB")
                     vram_limit = max(1,vram_limit-1)
                     max_memory[0] = f"{vram_limit}GiB"
+                else:
+                    if torch.cuda.is_available():
+                        free_mem, total_mem = torch.cuda.mem_get_info()
+                        max_memory[0] = int(free_mem * 0.95 - 2147483648)
+                        print(f"✓ Set VRAM limit to {max_memory[0]/1024/1024/1024:.01f}GiB")
                 
                 device_map = infer_auto_device_map(
                     temp_model_for_analysis,
@@ -566,8 +577,6 @@ class SeCVideoSegmentation:
             tuple: (points_array, labels_array, validation_errors) where validation_errors
                    is a list of error messages, or (None, None, errors) if all points invalid
         """
-        import json
-
         if not points_str or not points_str.strip():
             return None, None, []
 
@@ -832,7 +841,6 @@ class SeCVideoSegmentation:
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
 
-            import gc
             gc.collect()
 
             # Step 5: Restore metadata and mark as unloaded
@@ -877,16 +885,11 @@ class SeCVideoSegmentation:
             
             # Recreate config fresh to avoid any stored state issues
             # Use config_path which points to repo config for single files
-            from .inference.configuration_sec import SeCConfig
             config = SeCConfig.from_pretrained(config_path)
             config.hydra_overrides_extra = hydra_overrides_extra
 
             # Prepare for loading
-            from .inference.modeling_sec import SeCModel
-            from transformers import AutoTokenizer
-
             if device.startswith("cuda:"):
-                import gc
                 gc.collect()
                 torch.cuda.empty_cache()
 
@@ -1016,7 +1019,6 @@ class SeCVideoSegmentation:
             del fresh_model
             if torch.cuda.is_available():
                 torch.cuda.empty_cache()
-            import gc
             gc.collect()
 
             return True
@@ -1310,14 +1312,14 @@ class SeCVideoSegmentation:
             obj_ids_tensor = torch.tensor(output_obj_ids, dtype=torch.int32)
             
             return (masks_tensor, obj_ids_tensor)
-        
+
         except Exception as e:
+            if isinstance(e, InterruptProcessingException):
+                raise
             raise RuntimeError(f"SeC video segmentation failed: {str(e)}")
 
         finally:
             # Cleanup: Always remove temp directory and clear cache
-            import gc
-
             # Model cleanup - move to CPU if requested
             if auto_unload_model:
                 self._cleanup_model_memory(model)
@@ -1385,8 +1387,6 @@ class CoordinatePlotter:
 
     def parse_color(self, color_str):
         """Parse hex or RGB color string to RGB tuple for PIL"""
-        import re
-
         color_str = color_str.strip()
 
         if color_str.startswith('#'):
@@ -1436,9 +1436,6 @@ class CoordinatePlotter:
     def plot_coordinates(self, coordinates, image=None, point_shape="circle",
                         point_size=10, point_color="#00FF00", width=512, height=512):
         """Plot coordinates on image or blank canvas"""
-        import json
-        from PIL import ImageDraw
-
         try:
             if not coordinates or not coordinates.strip():
                 coords_list = []

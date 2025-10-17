@@ -553,7 +553,7 @@ class SeCModel(PreTrainedModel):
 
         for frame_idx in tqdm(processing_order, desc="propagate in video"):
             if processing_interrupted():
-                return (None, None, None)
+                return
           
             _update_flag = False
             if frame_idx in consolidated_frame_inds["cond_frame_outputs"]:

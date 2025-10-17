@@ -1,105 +1,9 @@
 {
   "id": "45316879-6aab-4c4b-9c58-617d3ae59107",
   "revision": 0,
-  "last_node_id": 138,
-  "last_link_id": 344,
+  "last_node_id": 142,
+  "last_link_id": 354,
   "nodes": [
-    {
-      "id": 84,
-      "type": "PreviewImage",
-      "pos": [
-        2260,
-        -1190
-      ],
-      "size": [
-        210,
-        258
-      ],
-      "flags": {},
-      "order": 11,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 174
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "PreviewImage"
-      },
-      "widgets_values": []
-    },
-    {
-      "id": 82,
-      "type": "PreviewImage",
-      "pos": [
-        2260,
-        -850
-      ],
-      "size": [
-        217.037841796875,
-        289.670654296875
-      ],
-      "flags": {},
-      "order": 10,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 170
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "PreviewImage"
-      },
-      "widgets_values": []
-    },
-    {
-      "id": 86,
-      "type": "PrimitiveInt",
-      "pos": [
-        1250,
-        -1050
-      ],
-      "size": [
-        210,
-        82
-      ],
-      "flags": {},
-      "order": 0,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "INT",
-          "type": "INT",
-          "links": [
-            183,
-            330
-          ]
-        }
-      ],
-      "title": "Annotation Frame",
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "PrimitiveInt"
-      },
-      "widgets_values": [
-        0,
-        "fixed"
-      ],
-      "color": "#323",
-      "bgcolor": "#535"
-    },
     {
       "id": 130,
       "type": "SeCModelLoader",
@@ -112,7 +16,7 @@
         180
       ],
       "flags": {},
-      "order": 1,
+      "order": 0,
       "mode": 0,
       "inputs": [],
       "outputs": [
@@ -139,168 +43,25 @@
       ]
     },
     {
-      "id": 92,
-      "type": "ImageFromBatch",
-      "pos": [
-        1250,
-        -890
-      ],
-      "size": [
-        210,
-        82
-      ],
-      "flags": {
-        "collapsed": false
-      },
-      "order": 5,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 329
-        },
-        {
-          "name": "batch_index",
-          "type": "INT",
-          "widget": {
-            "name": "batch_index"
-          },
-          "link": 183
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            184,
-            314,
-            315
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "ImageFromBatch"
-      },
-      "widgets_values": [
-        0,
-        1
-      ]
-    },
-    {
-      "id": 57,
-      "type": "DrawMaskOnImage",
-      "pos": [
-        740,
-        -430
-      ],
-      "size": [
-        270,
-        102
-      ],
-      "flags": {},
-      "order": 13,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image",
-          "type": "IMAGE",
-          "link": 334
-        },
-        {
-          "name": "mask",
-          "type": "MASK",
-          "link": 333
-        }
-      ],
-      "outputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "links": [
-            225,
-            344
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui-kjnodes",
-        "ver": "9d7af919b91838fb22e31ad0107a6ddcf8bd7f3f",
-        "Node name for S&R": "DrawMaskOnImage"
-      },
-      "widgets_values": [
-        "255, 0, 0",
-        "cpu"
-      ]
-    },
-    {
-      "id": 123,
-      "type": "ImageConcanate",
-      "pos": [
-        1610,
-        -430
-      ],
-      "size": [
-        270,
-        102
-      ],
-      "flags": {},
-      "order": 12,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image1",
-          "type": "IMAGE",
-          "link": 305
-        },
-        {
-          "name": "image2",
-          "type": "IMAGE",
-          "link": 306
-        }
-      ],
-      "outputs": [
-        {
-          "name": "IMAGE",
-          "type": "IMAGE",
-          "links": [
-            307
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui-kjnodes",
-        "ver": "9d7af919b91838fb22e31ad0107a6ddcf8bd7f3f",
-        "Node name for S&R": "ImageConcanate"
-      },
-      "widgets_values": [
-        "down",
-        true
-      ]
-    },
-    {
-      "id": 81,
+      "id": 83,
       "type": "CoordinatePlotter",
       "pos": [
-        1970,
-        -850
+        1950,
+        -1260
       ],
       "size": [
         270,
         178
       ],
       "flags": {},
-      "order": 7,
+      "order": 8,
       "mode": 0,
       "inputs": [
         {
           "name": "image",
           "shape": 7,
           "type": "IMAGE",
-          "link": 184
+          "link": 314
         },
         {
           "name": "coordinates",
@@ -308,7 +69,7 @@
           "widget": {
             "name": "coordinates"
           },
-          "link": 317
+          "link": 318
         }
       ],
       "outputs": [
@@ -316,8 +77,8 @@
           "name": "image",
           "type": "IMAGE",
           "links": [
-            170,
-            306
+            174,
+            305
           ]
         }
       ],
@@ -327,43 +88,110 @@
         "Node name for S&R": "CoordinatePlotter"
       },
       "widgets_values": [
-        "[{\"x\": 100, \"y\": 100}]",
+        "",
         "square",
         10,
-        "#00FF00",
+        "255,0,0",
         512,
         512
-      ]
+      ],
+      "color": "#332922",
+      "bgcolor": "#593930"
     },
     {
-      "id": 90,
-      "type": "Note",
+      "id": 131,
+      "type": "SeCVideoSegmentation",
       "pos": [
-        420,
-        -1260
+        440,
+        -180
       ],
       "size": [
-        400,
-        720
+        279.412109375,
+        302
       ],
       "flags": {},
-      "order": 2,
+      "order": 9,
       "mode": 0,
-      "inputs": [],
-      "outputs": [],
-      "properties": {},
-      "widgets_values": [
-        "Required Files\nSec-4B model: https://huggingface.co/OpenIXCLab/SeC-4B\nNote: this is very large, and if you haven't pre-downloaded this auto-download will take a while depending on your connection speed.\n\nRequired non-standard nodes for this workflow\nComfyui-SecNodes: https://github.com/9nate-drake/Comfyui-SecNodes\n\nThis is a memory heavy model. To reduce memory use:\n* offload video to cpu (negligible speed penalty and large vram usage reduction)\n* lower 'mllm_memory_size' (number of frames the llm is using as context. very small vram usage reduction)\n\n\nInputs\nAnnotation Frame: the frame that has the best representation of what you want to segment\nTracking Direction: Which direction to segment from your annotation frame\n"
+      "inputs": [
+        {
+          "name": "model",
+          "type": "SEC_MODEL",
+          "link": 326
+        },
+        {
+          "name": "frames",
+          "type": "IMAGE",
+          "link": 347
+        },
+        {
+          "name": "positive_points",
+          "shape": 7,
+          "type": "STRING",
+          "link": 332
+        },
+        {
+          "name": "negative_points",
+          "shape": 7,
+          "type": "STRING",
+          "link": 331
+        },
+        {
+          "name": "bbox",
+          "shape": 7,
+          "type": "BBOX",
+          "link": null
+        },
+        {
+          "name": "input_mask",
+          "shape": 7,
+          "type": "MASK",
+          "link": null
+        },
+        {
+          "name": "annotation_frame_idx",
+          "shape": 7,
+          "type": "INT",
+          "widget": {
+            "name": "annotation_frame_idx"
+          },
+          "link": 330
+        }
       ],
-      "color": "#432",
-      "bgcolor": "#653"
+      "outputs": [
+        {
+          "name": "masks",
+          "type": "MASK",
+          "links": [
+            333
+          ]
+        },
+        {
+          "name": "object_ids",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "aux_id": "lihaoyun6/ComfyUI-SecNodes_Ultra_Fast",
+        "ver": "2e9c600de136f34cca73973bc2b115839d241903",
+        "Node name for S&R": "SeCVideoSegmentation"
+      },
+      "widgets_values": [
+        "bidirectional",
+        0,
+        1,
+        -1,
+        12,
+        true,
+        true
+      ]
     },
     {
       "id": 126,
       "type": "PointsEditor",
       "pos": [
-        1500,
-        -1300
+        1490,
+        -1320
       ],
       "size": [
         429,
@@ -441,25 +269,87 @@
       ]
     },
     {
-      "id": 83,
+      "id": 84,
+      "type": "PreviewImage",
+      "pos": [
+        2240,
+        -1260
+      ],
+      "size": [
+        240,
+        320
+      ],
+      "flags": {},
+      "order": 11,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 174
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.60",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "color": "#332922",
+      "bgcolor": "#593930"
+    },
+    {
+      "id": 82,
+      "type": "PreviewImage",
+      "pos": [
+        2240,
+        -890
+      ],
+      "size": [
+        240,
+        320
+      ],
+      "flags": {},
+      "order": 10,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 170
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.60",
+        "Node name for S&R": "PreviewImage"
+      },
+      "widgets_values": [],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 81,
       "type": "CoordinatePlotter",
       "pos": [
-        1970,
-        -1190
+        1950,
+        -890
       ],
       "size": [
         270,
         178
       ],
       "flags": {},
-      "order": 8,
+      "order": 7,
       "mode": 0,
       "inputs": [
         {
           "name": "image",
           "shape": 7,
           "type": "IMAGE",
-          "link": 314
+          "link": 184
         },
         {
           "name": "coordinates",
@@ -467,7 +357,7 @@
           "widget": {
             "name": "coordinates"
           },
-          "link": 318
+          "link": 317
         }
       ],
       "outputs": [
@@ -475,8 +365,8 @@
           "name": "image",
           "type": "IMAGE",
           "links": [
-            174,
-            305
+            170,
+            306
           ]
         }
       ],
@@ -486,23 +376,353 @@
         "Node name for S&R": "CoordinatePlotter"
       },
       "widgets_values": [
-        "",
+        "[{\"x\": 100, \"y\": 100}]",
         "square",
         10,
-        "255,0,0",
+        "#00FF00",
         512,
         512
+      ],
+      "color": "#232",
+      "bgcolor": "#353"
+    },
+    {
+      "id": 86,
+      "type": "PrimitiveInt",
+      "pos": [
+        1220,
+        -980
+      ],
+      "size": [
+        220,
+        82
+      ],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "INT",
+          "type": "INT",
+          "links": [
+            183,
+            330
+          ]
+        }
+      ],
+      "title": "Annotation Frame",
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.3.60",
+        "Node name for S&R": "PrimitiveInt"
+      },
+      "widgets_values": [
+        0,
+        "fixed"
+      ],
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 57,
+      "type": "DrawMaskOnImage",
+      "pos": [
+        440,
+        190
+      ],
+      "size": [
+        270,
+        102
+      ],
+      "flags": {},
+      "order": 13,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 349
+        },
+        {
+          "name": "mask",
+          "type": "MASK",
+          "link": 333
+        }
+      ],
+      "outputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "links": [
+            225,
+            354
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-kjnodes",
+        "ver": "9d7af919b91838fb22e31ad0107a6ddcf8bd7f3f",
+        "Node name for S&R": "DrawMaskOnImage"
+      },
+      "widgets_values": [
+        "255, 0, 0",
+        "cpu"
+      ]
+    },
+    {
+      "id": 142,
+      "type": "VHS_VideoCombine",
+      "pos": [
+        760,
+        -440
+      ],
+      "size": [
+        510,
+        340
+      ],
+      "flags": {},
+      "order": 15,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 354
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": null
+        },
+        {
+          "name": "meta_batch",
+          "shape": 7,
+          "type": "VHS_BatchManager",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": null
+        },
+        {
+          "name": "frame_rate",
+          "type": "FLOAT",
+          "widget": {
+            "name": "frame_rate"
+          },
+          "link": 353
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Filenames",
+          "type": "VHS_FILENAMES",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-videohelpersuite",
+        "ver": "08e8df15db24da292d4b7f943c460dc2ab442b24",
+        "Node name for S&R": "VHS_VideoCombine"
+      },
+      "widgets_values": {
+        "frame_rate": 8,
+        "loop_count": 0,
+        "filename_prefix": "AnimateDiff",
+        "format": "video/h264-mp4",
+        "pix_fmt": "yuv420p",
+        "crf": 19,
+        "save_metadata": false,
+        "trim_to_audio": false,
+        "pingpong": false,
+        "save_output": false,
+        "videopreview": {
+          "hidden": false,
+          "paused": false,
+          "params": {}
+        }
+      }
+    },
+    {
+      "id": 141,
+      "type": "VHS_VideoCombine",
+      "pos": [
+        1890,
+        -430
+      ],
+      "size": [
+        590,
+        334
+      ],
+      "flags": {},
+      "order": 18,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 351
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": null
+        },
+        {
+          "name": "meta_batch",
+          "shape": 7,
+          "type": "VHS_BatchManager",
+          "link": null
+        },
+        {
+          "name": "vae",
+          "shape": 7,
+          "type": "VAE",
+          "link": null
+        },
+        {
+          "name": "frame_rate",
+          "type": "FLOAT",
+          "widget": {
+            "name": "frame_rate"
+          },
+          "link": 352
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Filenames",
+          "type": "VHS_FILENAMES",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-videohelpersuite",
+        "ver": "08e8df15db24da292d4b7f943c460dc2ab442b24",
+        "Node name for S&R": "VHS_VideoCombine"
+      },
+      "widgets_values": {
+        "frame_rate": 8,
+        "loop_count": 0,
+        "filename_prefix": "AnimateDiff",
+        "format": "video/h264-mp4",
+        "pix_fmt": "yuv420p",
+        "crf": 19,
+        "save_metadata": false,
+        "trim_to_audio": false,
+        "pingpong": false,
+        "save_output": false,
+        "videopreview": {
+          "hidden": false,
+          "paused": false,
+          "params": {}
+        }
+      }
+    },
+    {
+      "id": 123,
+      "type": "ImageConcanate",
+      "pos": [
+        1340,
+        -430
+      ],
+      "size": [
+        240,
+        102
+      ],
+      "flags": {},
+      "order": 12,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 305
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": 306
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            307
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-kjnodes",
+        "ver": "9d7af919b91838fb22e31ad0107a6ddcf8bd7f3f",
+        "Node name for S&R": "ImageConcanate"
+      },
+      "widgets_values": [
+        "down",
+        true
+      ]
+    },
+    {
+      "id": 107,
+      "type": "ImageConcanate",
+      "pos": [
+        1340,
+        -280
+      ],
+      "size": [
+        240,
+        102
+      ],
+      "flags": {},
+      "order": 14,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image1",
+          "type": "IMAGE",
+          "link": 348
+        },
+        {
+          "name": "image2",
+          "type": "IMAGE",
+          "link": 225
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            301
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-kjnodes",
+        "ver": "9d7af919b91838fb22e31ad0107a6ddcf8bd7f3f",
+        "Node name for S&R": "ImageConcanate"
+      },
+      "widgets_values": [
+        "down",
+        true
       ]
     },
     {
       "id": 122,
       "type": "ImageConcatMulti",
       "pos": [
-        1610,
-        -280
+        1340,
+        -120
       ],
       "size": [
-        270,
+        240,
         150
       ],
       "flags": {},
@@ -546,14 +766,14 @@
       "type": "AddLabel",
       "pos": [
         1610,
-        -80
+        -430
       ],
       "size": [
-        270,
+        260,
         270
       ],
       "flags": {},
-      "order": 18,
+      "order": 17,
       "mode": 0,
       "inputs": [
         {
@@ -573,7 +793,7 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            339
+            351
           ]
         }
       ],
@@ -595,201 +815,31 @@
       ]
     },
     {
-      "id": 136,
-      "type": "CreateVideo",
+      "id": 139,
+      "type": "VHS_LoadVideo",
       "pos": [
-        1610,
-        240
+        900,
+        -1260
       ],
       "size": [
-        270,
-        80
+        300,
+        570
       ],
       "flags": {},
-      "order": 19,
+      "order": 2,
       "mode": 0,
       "inputs": [
         {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 339
-        },
-        {
-          "name": "audio",
+          "name": "meta_batch",
           "shape": 7,
-          "type": "AUDIO",
+          "type": "VHS_BatchManager",
           "link": null
         },
         {
-          "name": "fps",
-          "type": "FLOAT",
-          "widget": {
-            "name": "fps"
-          },
-          "link": 340
-        }
-      ],
-      "outputs": [
-        {
-          "name": "VIDEO",
-          "type": "VIDEO",
-          "links": [
-            341
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "CreateVideo"
-      },
-      "widgets_values": [
-        30
-      ]
-    },
-    {
-      "id": 135,
-      "type": "SaveVideo",
-      "pos": [
-        1900,
-        -430
-      ],
-      "size": [
-        580,
-        750
-      ],
-      "flags": {},
-      "order": 20,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "video",
-          "type": "VIDEO",
-          "link": 341
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "SaveVideo"
-      },
-      "widgets_values": [
-        "video/ComfyUI",
-        "mp4",
-        "h264"
-      ]
-    },
-    {
-      "id": 138,
-      "type": "SaveVideo",
-      "pos": [
-        1030,
-        -430
-      ],
-      "size": [
-        520,
-        750
-      ],
-      "flags": {},
-      "order": 17,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "video",
-          "type": "VIDEO",
-          "link": 342
-        }
-      ],
-      "outputs": [],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "SaveVideo"
-      },
-      "widgets_values": [
-        "video/ComfyUI",
-        "mp4",
-        "h264"
-      ]
-    },
-    {
-      "id": 137,
-      "type": "CreateVideo",
-      "pos": [
-        740,
-        -100
-      ],
-      "size": [
-        260,
-        80
-      ],
-      "flags": {},
-      "order": 15,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "link": 344
-        },
-        {
-          "name": "audio",
+          "name": "vae",
           "shape": 7,
-          "type": "AUDIO",
+          "type": "VAE",
           "link": null
-        },
-        {
-          "name": "fps",
-          "type": "FLOAT",
-          "widget": {
-            "name": "fps"
-          },
-          "link": 343
-        }
-      ],
-      "outputs": [
-        {
-          "name": "VIDEO",
-          "type": "VIDEO",
-          "links": [
-            342
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "CreateVideo"
-      },
-      "widgets_values": [
-        30
-      ]
-    },
-    {
-      "id": 107,
-      "type": "ImageConcanate",
-      "pos": [
-        740,
-        -260
-      ],
-      "size": [
-        260,
-        102
-      ],
-      "flags": {},
-      "order": 14,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "image1",
-          "type": "IMAGE",
-          "link": 335
-        },
-        {
-          "name": "image2",
-          "type": "IMAGE",
-          "link": 225
         }
       ],
       "outputs": [
@@ -797,175 +847,16 @@
           "name": "IMAGE",
           "type": "IMAGE",
           "links": [
-            301
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfyui-kjnodes",
-        "ver": "9d7af919b91838fb22e31ad0107a6ddcf8bd7f3f",
-        "Node name for S&R": "ImageConcanate"
-      },
-      "widgets_values": [
-        "down",
-        true
-      ]
-    },
-    {
-      "id": 131,
-      "type": "SeCVideoSegmentation",
-      "pos": [
-        440,
-        -180
-      ],
-      "size": [
-        279.412109375,
-        302
-      ],
-      "flags": {},
-      "order": 9,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "model",
-          "type": "SEC_MODEL",
-          "link": 326
-        },
-        {
-          "name": "frames",
-          "type": "IMAGE",
-          "link": 328
-        },
-        {
-          "name": "positive_points",
-          "shape": 7,
-          "type": "STRING",
-          "link": 332
-        },
-        {
-          "name": "negative_points",
-          "shape": 7,
-          "type": "STRING",
-          "link": 331
-        },
-        {
-          "name": "bbox",
-          "shape": 7,
-          "type": "BBOX",
-          "link": null
-        },
-        {
-          "name": "input_mask",
-          "shape": 7,
-          "type": "MASK",
-          "link": null
-        },
-        {
-          "name": "annotation_frame_idx",
-          "shape": 7,
-          "type": "INT",
-          "widget": {
-            "name": "annotation_frame_idx"
-          },
-          "link": 330
-        }
-      ],
-      "outputs": [
-        {
-          "name": "masks",
-          "type": "MASK",
-          "links": [
-            333
+            346,
+            347,
+            348,
+            349
           ]
         },
         {
-          "name": "object_ids",
+          "name": "frame_count",
           "type": "INT",
           "links": null
-        }
-      ],
-      "properties": {
-        "aux_id": "lihaoyun6/ComfyUI-SecNodes_Ultra_Fast",
-        "ver": "2e9c600de136f34cca73973bc2b115839d241903",
-        "Node name for S&R": "SeCVideoSegmentation"
-      },
-      "widgets_values": [
-        "bidirectional",
-        0,
-        1,
-        -1,
-        12,
-        true,
-        true
-      ]
-    },
-    {
-      "id": 134,
-      "type": "LoadVideo",
-      "pos": [
-        860,
-        -1220
-      ],
-      "size": [
-        374,
-        672.4000244140625
-      ],
-      "flags": {},
-      "order": 3,
-      "mode": 0,
-      "inputs": [],
-      "outputs": [
-        {
-          "name": "VIDEO",
-          "type": "VIDEO",
-          "links": [
-            336
-          ]
-        }
-      ],
-      "properties": {
-        "cnr_id": "comfy-core",
-        "ver": "0.3.60",
-        "Node name for S&R": "LoadVideo"
-      },
-      "widgets_values": [
-        "dog2.mp4",
-        "image"
-      ],
-      "color": "#323",
-      "bgcolor": "#535"
-    },
-    {
-      "id": 133,
-      "type": "GetVideoComponents",
-      "pos": [
-        1250,
-        -1200
-      ],
-      "size": [
-        210,
-        70
-      ],
-      "flags": {},
-      "order": 4,
-      "mode": 0,
-      "inputs": [
-        {
-          "name": "video",
-          "type": "VIDEO",
-          "link": 336
-        }
-      ],
-      "outputs": [
-        {
-          "name": "images",
-          "type": "IMAGE",
-          "links": [
-            328,
-            329,
-            334,
-            335
-          ]
         },
         {
           "name": "audio",
@@ -973,22 +864,208 @@
           "links": null
         },
         {
-          "name": "fps",
+          "name": "video_info",
+          "type": "VHS_VIDEOINFO",
+          "links": [
+            345
+          ]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-videohelpersuite",
+        "ver": "08e8df15db24da292d4b7f943c460dc2ab442b24",
+        "Node name for S&R": "VHS_LoadVideo"
+      },
+      "widgets_values": {
+        "video": "dog2.mp4",
+        "force_rate": 0,
+        "custom_width": 0,
+        "custom_height": 0,
+        "frame_load_cap": 0,
+        "skip_first_frames": 0,
+        "select_every_nth": 1,
+        "format": "AnimateDiff",
+        "choose video to upload": "image",
+        "videopreview": {
+          "hidden": false,
+          "paused": false,
+          "params": {
+            "filename": "dog2.mp4",
+            "type": "input",
+            "format": "video/mp4",
+            "force_rate": 0,
+            "custom_width": 0,
+            "custom_height": 0,
+            "frame_load_cap": 0,
+            "skip_first_frames": 0,
+            "select_every_nth": 1
+          }
+        }
+      },
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 140,
+      "type": "VHS_VideoInfo",
+      "pos": [
+        1220,
+        -1260
+      ],
+      "size": [
+        224.12109375,
+        206
+      ],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video_info",
+          "type": "VHS_VIDEOINFO",
+          "link": 345
+        }
+      ],
+      "outputs": [
+        {
+          "name": "source_fps🟨",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "source_frame_count🟨",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "source_duration🟨",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "source_width🟨",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "source_height🟨",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "loaded_fps🟦",
           "type": "FLOAT",
           "links": [
-            340,
-            343
+            352,
+            353
+          ]
+        },
+        {
+          "name": "loaded_frame_count🟦",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "loaded_duration🟦",
+          "type": "FLOAT",
+          "links": null
+        },
+        {
+          "name": "loaded_width🟦",
+          "type": "INT",
+          "links": null
+        },
+        {
+          "name": "loaded_height🟦",
+          "type": "INT",
+          "links": null
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfyui-videohelpersuite",
+        "ver": "08e8df15db24da292d4b7f943c460dc2ab442b24",
+        "Node name for S&R": "VHS_VideoInfo"
+      },
+      "widgets_values": {},
+      "color": "#323",
+      "bgcolor": "#535"
+    },
+    {
+      "id": 92,
+      "type": "ImageFromBatch",
+      "pos": [
+        1220,
+        -820
+      ],
+      "size": [
+        220,
+        82
+      ],
+      "flags": {
+        "collapsed": false
+      },
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 346
+        },
+        {
+          "name": "batch_index",
+          "type": "INT",
+          "widget": {
+            "name": "batch_index"
+          },
+          "link": 183
+        }
+      ],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "links": [
+            184,
+            314,
+            315
           ]
         }
       ],
       "properties": {
         "cnr_id": "comfy-core",
         "ver": "0.3.60",
-        "Node name for S&R": "GetVideoComponents"
+        "Node name for S&R": "ImageFromBatch"
       },
-      "widgets_values": [],
-      "color": "#323",
-      "bgcolor": "#535"
+      "widgets_values": [
+        0,
+        1
+      ],
+      "color": "#223",
+      "bgcolor": "#335"
+    },
+    {
+      "id": 90,
+      "type": "Note",
+      "pos": [
+        420,
+        -1320
+      ],
+      "size": [
+        430,
+        780
+      ],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [],
+      "properties": {},
+      "widgets_values": [
+        "Required Files\nSec-4B model: https://huggingface.co/OpenIXCLab/SeC-4B\nNote: this is very large, and if you haven't pre-downloaded this auto-download will take a while depending on your connection speed.\n\nRequired non-standard nodes for this workflow\nComfyui-SecNodes: https://github.com/9nate-drake/Comfyui-SecNodes\n\nThis is a memory heavy model. To reduce memory use:\n* offload video to cpu (negligible speed penalty and large vram usage reduction)\n* lower 'mllm_memory_size' (number of frames the llm is using as context. very small vram usage reduction)\n\n\nInputs\nAnnotation Frame: the frame that has the best representation of what you want to segment\nTracking Direction: Which direction to segment from your annotation frame\n"
+      ],
+      "color": "#432",
+      "bgcolor": "#653"
     }
   ],
   "links": [
@@ -1113,22 +1190,6 @@
       "SEC_MODEL"
     ],
     [
-      328,
-      133,
-      0,
-      131,
-      1,
-      "IMAGE"
-    ],
-    [
-      329,
-      133,
-      0,
-      92,
-      0,
-      "IMAGE"
-    ],
-    [
       330,
       86,
       0,
@@ -1161,74 +1222,74 @@
       "MASK"
     ],
     [
-      334,
-      133,
+      345,
+      139,
+      3,
+      140,
       0,
-      57,
+      "VHS_VIDEOINFO"
+    ],
+    [
+      346,
+      139,
+      0,
+      92,
       0,
       "IMAGE"
     ],
     [
-      335,
-      133,
+      347,
+      139,
+      0,
+      131,
+      1,
+      "IMAGE"
+    ],
+    [
+      348,
+      139,
       0,
       107,
       0,
       "IMAGE"
     ],
     [
-      336,
-      134,
+      349,
+      139,
       0,
-      133,
-      0,
-      "VIDEO"
-    ],
-    [
-      339,
-      128,
-      0,
-      136,
+      57,
       0,
       "IMAGE"
     ],
     [
-      340,
-      133,
-      2,
-      136,
-      2,
+      351,
+      128,
+      0,
+      141,
+      0,
+      "IMAGE"
+    ],
+    [
+      352,
+      140,
+      5,
+      141,
+      4,
       "FLOAT"
     ],
     [
-      341,
-      136,
-      0,
-      135,
-      0,
-      "VIDEO"
-    ],
-    [
-      342,
-      137,
-      0,
-      138,
-      0,
-      "VIDEO"
-    ],
-    [
-      343,
-      133,
-      2,
-      137,
-      2,
+      353,
+      140,
+      5,
+      142,
+      4,
       "FLOAT"
     ],
     [
-      344,
+      354,
       57,
       0,
-      137,
+      142,
       0,
       "IMAGE"
     ]
@@ -1238,10 +1299,10 @@
       "id": 3,
       "title": "Coordinate Visualize",
       "bounding": [
-        1950,
-        -1280,
-        550,
-        740
+        1930,
+        -1350,
+        570,
+        810
       ],
       "color": "#88A",
       "font_size": 24,
@@ -1251,10 +1312,10 @@
       "id": 4,
       "title": "Load",
       "bounding": [
-        840,
-        -1290,
-        640,
-        750
+        870,
+        -1350,
+        600,
+        810
       ],
       "color": "#A88",
       "font_size": 24,
@@ -1266,8 +1327,8 @@
       "bounding": [
         420,
         -520,
-        1150,
-        860
+        880,
+        870
       ],
       "color": "#3f789e",
       "font_size": 24,
@@ -1277,10 +1338,10 @@
       "id": 6,
       "title": "Video Visualize",
       "bounding": [
-        1590,
+        1320,
         -520,
-        910,
-        860
+        1180,
+        870
       ],
       "color": "#88A",
       "font_size": 24,
@@ -1290,10 +1351,10 @@
   "config": {},
   "extra": {
     "ds": {
-      "scale": 0.5,
+      "scale": 0.3998170911078189,
       "offset": [
-        183.97000045134308,
-        1323.2385061419877
+        535.5282062681636,
+        1380.7736012198689
       ]
     },
     "frontendVersion": "1.26.13",
